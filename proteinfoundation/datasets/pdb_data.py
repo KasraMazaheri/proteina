@@ -531,36 +531,49 @@ class PDBLightningDataModule(BaseLightningDataModule):
                 df_data = self._load_pdb_folder_data(self.raw_dir)
                 # process pdb files into seperate chains and save processed objects as .pt files
                 self._process_structure_data(
-                    pdb_codes=df_data["pdb"].tolist(),
+                    pdb_codes=df_data["pdb"].tolist(), # This is now the flat_id list
                     chains=None,
+                    input_paths=df_data["input_path"].tolist()
                 )
                 # save df_data to disk for later use (in splitting, dataloading etc)
                 logger.info(f"Saving dataset csv to {df_data_name}")
                 df_data.to_csv(self.data_dir / df_data_name, index=False)
-            
+
     def _load_pdb_folder_data(self, data_dir: pathlib.Path) -> pd.DataFrame:
         """
-        Load PDB files from a folder and create a DataFrame with filenames.
+        Load PDB files from a folder and its subfolders recursively
+        and create a DataFrame with filenames.
         
         Args:
             data_dir (pathlib.Path): Path to the directory containing PDB files
             
         Returns:
-            pd.DataFrame: DataFrame with 'pdb' column containing filenames
+            pd.DataFrame: DataFrame with 'pdb' (file_id) and 'input_path' columns
         """
-        # Get all files with the specified format extension
-        pdb_files = list(data_dir.glob(f"*.{self.format}"))
+        logger.info(f"Recursively searching for *.{self.format} files in {data_dir}...")
+        pdb_files = list(data_dir.rglob(f"*.{self.format}"))
         
-        # Create DataFrame with filenames
-        df_data = pd.DataFrame({
-            'pdb': [pdb_file.stem for pdb_file in pdb_files],
-            'id': [pdb_file.stem for pdb_file in pdb_files],
-        })
-        
-        if len(df_data) == 0:
-            raise ValueError(f"No files with extension .{self.format} found in {data_dir}")
+        if len(pdb_files) == 0:
+            raise ValueError(f"No files with extension .{self.format} found recursively in {data_dir}")
             
-        logger.info(f"Found {len(df_data)} {self.format} files in {data_dir}")
+        logger.info(f"Found {len(pdb_files)} {self.format} files in {data_dir} and its subdirectories.")
+        
+        input_paths = []
+        file_ids = []
+        for p in pdb_files:
+            relative_path = p.relative_to(data_dir)
+            input_paths.append(str(relative_path)) # e.g., "subdir/1ABC.pdb"
+            
+            # Create a flat, unique ID by joining path parts with '_'
+            # e.g., PosixPath('subdir/1ABC') -> ('subdir', '1ABC') -> 'subdir_1ABC'
+            flat_id = "_".join(relative_path.with_suffix('').parts)
+            file_ids.append(flat_id) # e.g., "subdir_1ABC"
+
+        df_data = pd.DataFrame({
+            'input_path': input_paths, # the raw file
+            'pdb': file_ids, # the unique ID (used by splitter)
+            'id': file_ids, # the unique ID
+        })
         
         return df_data
 
@@ -607,9 +620,19 @@ class PDBLightningDataModule(BaseLightningDataModule):
         elif stage == "test":
             self.test_ds = self.test_dataset()
 
-    def _process_structure_data(self, pdb_codes, chains):
+    def _process_structure_data(self, pdb_codes, chains, input_paths=None):
         """Process raw data sequentially instead of using multiprocessing."""
-        if chains is not None:
+        
+        if input_paths is not None:
+            # Our new local, recursive path
+            # pdb_codes are file_ids (e.g., 'subdir_1ABC')
+            # input_paths are relative paths (e.g., 'subdir/1ABC.pdb')
+            index_pdb_tuples = [
+                (i, pdb_codes[i], input_paths[i])
+                for i in range(len(pdb_codes))
+                if not (self.processed_dir / f"{pdb_codes[i]}.pt").exists()
+            ]
+        elif chains is not None:
             index_pdb_tuples = [
                 (i, pdb, chains[i])
                 for i, pdb in enumerate(pdb_codes)
@@ -653,23 +676,45 @@ class PDBLightningDataModule(BaseLightningDataModule):
             FileNotFoundError: If the PDB file is not found in the raw directory.
         """
         try:
+            is_local_recursive_path = False
             if len(index_pdb_tuple) == 3:
+                # Check if 3rd element is a path ending in our format
+                # This distinguishes (i, file_id, input_path) from (i, pdb_code, chain)
+                if index_pdb_tuple[2].endswith(self.format):
+                    is_local_recursive_path = True
+            
+            if is_local_recursive_path:
+                i, file_id, input_path_rel = index_pdb_tuple
+                path = self.raw_dir / input_path_rel
+                chains = "all"
+                fname = f"{file_id}.pt"
+            
+            elif len(index_pdb_tuple) == 3:
                 i, pdb, chains = index_pdb_tuple
+                path = self.raw_dir / f"{pdb}.{self.format}"
+                fname = f"{pdb}_{chains}.pt"
+
             elif len(index_pdb_tuple) == 2:
                 i, pdb = index_pdb_tuple
                 chains = "all"
+                path = self.raw_dir / f"{pdb}.{self.format}"
+                fname = f"{pdb}.pt"
+                
             else:
                 raise ValueError("index_pdb_tuple must have 2 or 3 elements")
 
-            path = self.raw_dir / f"{pdb}.{self.format}"
-            if path.exists():
-                path = str(path)
-            elif path.with_suffix("." + self.format + ".gz").exists():
-                path = str(path.with_suffix("." + self.format + ".gz"))
-            else:
-                raise FileNotFoundError(
-                    f"{pdb} not found in raw directory. Are you sure it's downloaded and has the format {self.format}?"
-                )
+            # Check for file existence (and .gz version)
+            if not path.exists():
+                gz_path = path.with_suffix(path.suffix + ".gz")
+                if gz_path.exists():
+                    path = gz_path
+                else:
+                    raise FileNotFoundError(
+                        f"{path.name} not found in raw directory. "
+                        f"Looked for {path} and {gz_path}"
+                    )
+            
+            path = str(path) # protein_to_pyg expects a string
 
             fill_value_coords = 1e-5
             graph = protein_to_pyg(
@@ -682,9 +727,12 @@ class PDBLightningDataModule(BaseLightningDataModule):
             )
 
         except Exception as e:
-            logger.warning(f"Error processing {pdb} {chains}: {e}")
+            # Use the correct variable for logging
+            log_id = file_id if 'file_id' in locals() else (pdb if 'pdb' in locals() else "Unknown")
+            logger.warning(f"Error processing {log_id}: {e}")
             return None
-        fname = f"{pdb}.pt" if chains == "all" else f"{pdb}_{chains}.pt"
+        
+        # fname is already set correctly in the logic above
 
         graph.id = fname.split(".")[0]
         coord_mask = graph.coords != fill_value_coords
