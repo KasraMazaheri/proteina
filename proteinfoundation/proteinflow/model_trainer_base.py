@@ -25,6 +25,8 @@ from loguru import logger
 from torch import Dict, Tensor
 
 from proteinfoundation.utils.ff_utils.pdb_utils import mask_cath_code_by_level
+from fast_designability import Designability
+from proteinfoundation.utils.coors_utils import nm_to_ang
 
 
 class ModelTrainerBase(L.LightningModule):
@@ -50,6 +52,8 @@ class ModelTrainerBase(L.LightningModule):
         # For autoguidance, overridden in `self.configure_inference`
         self.nn_ag = None
         self.motif_conditioning = cfg_exp.training.get("motif_conditioning", False)
+
+        self.compute_designabilities = False
 
     def configure_optimizers(self):
         optimizer = torch.optim.Adam(
@@ -456,6 +460,10 @@ class ModelTrainerBase(L.LightningModule):
         self.inf_cfg = inf_cfg
         self.nn_ag = nn_ag
 
+    def on_predict_start(self):
+        if self.compute_designabilities:
+            self.designability = Designability(self.device)
+
     def predict_step(self, batch, batch_idx):
         """
         Makes predictions. Should call set_inf_cfg before calling this.
@@ -507,7 +515,10 @@ class ModelTrainerBase(L.LightningModule):
             fixed_sequence_mask = fixed_sequence_mask,
             fixed_structure_mask = fixed_structure_mask,
         )
-        return self.samples_to_atom37(x)  # [b, n, 37, 3]
+        if self.compute_designabilities:
+            return self.designability.scRMSD(nm_to_ang(x))
+        else:
+            return self.samples_to_atom37(x)  # [b, n, 37, 3]
 
     def generate(
         self,
