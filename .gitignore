@@ -23,3 +23,9 @@ wandb/
 tmp/*
 *.fasta
 inference/*
+
+build/*
+proteina_additional_files/*
+__MACOSX/*
+proteinfoundation.egg-info/*
+store/*
