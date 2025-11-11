@@ -463,6 +463,7 @@ class ModelTrainerBase(L.LightningModule):
     def on_predict_start(self):
         if self.compute_designabilities:
             self.designability = Designability(self.device)
+        L.seed_everything(self.cfg_exp.seed + self.global_rank)
 
     def predict_step(self, batch, batch_idx):
         """

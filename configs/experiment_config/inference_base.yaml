@@ -6,7 +6,7 @@ ncpus_: 24
 seed: 5
 
 # Lengths to sample. Uses `nres_lens` if specified, otherwise arange(min_len, max_len+1, step)
-nres_lens: [50, 100, 150, 200, 250]
+nres_lens: [250, 200, 150, 100, 50] #[50, 100, 150, 200, 250]
 min_len:
 max_len:
 step_len:
