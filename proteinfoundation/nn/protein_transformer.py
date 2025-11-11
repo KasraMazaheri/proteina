@@ -656,6 +656,8 @@ class ProteinTransformerAF3(torch.nn.Module):
         Returns:
             Predicted clean coordinates, shape [b, n, 3].
         """
+        self = torch.compile(self, dynamic=False)
+        
         mask = batch_nn["mask"]
 
         # Conditioning variables
