@@ -109,7 +109,7 @@ class PaddingTransform(T.BaseTransform):
     with a fill value up to max_size along the first dimension.
     """
 
-    def __init__(self, max_size=256, fill_value=0):
+    def __init__(self, max_size=250, fill_value=0):
         """Initializes the transform.
 
         Args:
