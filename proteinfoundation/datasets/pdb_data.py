@@ -373,7 +373,7 @@ class PDBDataset(Dataset):
 
         if self.in_memory:
             logger.info("Reading data into memory")
-            self.data = [torch.load(self.processed_dir / f) for f in tqdm(file_names)]
+            self.data = [torch.load(self.processed_dir / "dataset" / f) for f in tqdm(file_names)]
 
     def __len__(self):
         return len(self.file_names)
@@ -397,7 +397,7 @@ class PDBDataset(Dataset):
             else:
                 fname = f"{self.pdb_codes[idx]}.pt"
 
-            graph = torch.load(self.data_dir / "processed" / fname, weights_only=False)
+            graph = torch.load(self.data_dir / "processed" / "dataset" / fname, weights_only=False)
 
         # reorder coords to be in OpenFold and not PDB convention
         graph.coords = graph.coords[:, PDB_TO_OPENFOLD_INDEX_TENSOR, :]
@@ -497,6 +497,7 @@ class PDBLightningDataModule(BaseLightningDataModule):
         self.file_names = None
 
     def prepare_data(self):
+        return # Unnecessary since we preprocess our custom dataset beforehand
         if self.dataselector:
             file_identifier = self._get_file_identifier(self.dataselector)
             df_data_name = f"{file_identifier}.csv"
@@ -521,7 +522,11 @@ class PDBLightningDataModule(BaseLightningDataModule):
                 df_data.to_csv(self.data_dir / df_data_name, index=False)
 
         else:  # user-provided dataset
-            df_data_name = f"{self.data_dir.name}.csv"
+            # df_data_name = f"{self.data_dir.name}.csv"
+            self.raw_dir = self.raw_dir / f"dataset_{pid}"
+            self.processed_dir = self.processed_dir / f"dataset_{pid}"
+            os.makedirs(self.processed_dir, exist_ok = True)
+            df_data_name = f"custom_pdb_{pid}.csv"
             if not self.overwrite and (self.data_dir / df_data_name).exists():
                 logger.info(
                     f"{df_data_name} already exists, skipping data selection and processing stage."
@@ -602,7 +607,7 @@ class PDBLightningDataModule(BaseLightningDataModule):
             if self.dataselector:
                 file_identifier = self._get_file_identifier(self.dataselector)
             else:
-                file_identifier = self.data_dir.name
+                file_identifier = f"custom_pdb"
 
             df_data_name = f"{file_identifier}.csv"
             logger.info(f"Loading dataset csv from {df_data_name}")
