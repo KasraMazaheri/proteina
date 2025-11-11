@@ -490,7 +490,8 @@ class R3NFlowMatcher:
             if fixed_sequence_mask is not None:
                 x_motif = (x_motif - mean_w_mask(x_motif, fixed_sequence_mask, keepdim=True)) * fixed_sequence_mask[..., None]
                 
-            for step in tqdm(range(nsteps)):
+            # for step in tqdm(range(nsteps)):
+            for step in range(nsteps):
                 t = ts[step] * torch.ones(nsamples, device=device)  # [nsamples]
                 dt = ts[step + 1] - ts[step]  # float
                 gt_step = gt[step]  # float
