@@ -45,6 +45,7 @@ from proteinfoundation.utils.training_analysis_utils import (
     SkipNanGradCallback,
 )
 from fast_designability import Designability
+from proteinfoundation.proteinflow.designability_model import DesignabilityModel
 
 
 # Things that should only be done by a single process
@@ -75,23 +76,6 @@ def log_configs(path_configs, wandb_logger):
 def create_dir(checkpoint_path_store, parents=True, exist_ok=True):
     Path(checkpoint_path_store).mkdir(parents=parents, exist_ok=exist_ok)
 
-
-class DesignabilityModel(L.LightningModule):
-
-    def __init__(self):
-        super().__init__()
-
-    def on_train_start(self):
-        self.designability = Designability(self.device)
-        self.csv_fname = f"/dataset/pdb/custom_pdb_{self.global_rank}.csv"
-
-    def training_step(self, batch, batch_idx):
-
-        proteins, filenames = batch
-        scores = self.designability(proteins)
-        with open(self.csv_fname, "a") as f:
-            for i in range(proteins.shape[0]):
-                f.write(f"{filenames[i]},{scores[i].item()}\n")
 
 if __name__ == "__main__":
 
@@ -222,10 +206,6 @@ if __name__ == "__main__":
 
     # Set logger
     wandb_logger = None
-    if cfg_exp.log.log_wandb and not args.nolog:
-        wandb_logger = WandbLogger(project=cfg_exp.log.wandb_project, id=run_name)
-        callbacks.append(LogEpochTimeCallback())
-        callbacks.append(LogSetpTimeCallback())
 
     log_info(f"Using EMA with decay {cfg_exp.ema.decay}")
     callbacks.append(EMA(**cfg_exp.ema))
@@ -277,7 +257,7 @@ if __name__ == "__main__":
         callbacks.append(SkipNanGradCallback())
 
     # Define model
-    model = DesignabilityModel()
+    model = DesignabilityModel(cfg_exp)
 
     # Train
     plugins = []
@@ -302,6 +282,6 @@ if __name__ == "__main__":
         gradient_clip_algorithm="norm",
         gradient_clip_val=1.0,
     )
-    trainer.fit(
+    trainer.predict(
         model, datamodule, ckpt_path=last_ckpt_path
     )  # If None then it starts from scratch

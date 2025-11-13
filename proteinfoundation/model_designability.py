@@ -322,7 +322,9 @@ class ModelDesignability:
         predictions = self.trainer.predict(model, self.dataloader)
 
         print(f"Rank: {self.trainer.global_rank=} finished predicting.")
-        # return (torch.cat(predictions) < 2).to(torch.float32).mean().item()
+        result = (torch.cat(predictions) < 2).to(torch.float32).mean().item()
+        print(f"Rank: {self.trainer.global_rank}, result: {result}")
+        return result
 
         all_predictions_on_rank = torch.cat(predictions)
         target_device = self.trainer.strategy.root_device
@@ -346,12 +348,13 @@ class ModelDesignability:
             return None
 
 if __name__ == "__main__":
-    # ckpt_file="/homes/kasram/broteina/proteina/store/train_run_1gpu_full_model_1/checkpoints/chk_epoch=00000000_step=000000010000.ckpt"
-    ckpt_file="/homes/kasram/broteina/proteina/checkpoints/proteina_v1.2_DFS_200M_notri.ckpt"
+    ckpt_file="/homes/kasram/broteina/proteina/store/train_run_1gpu_full_model_1/checkpoints/chk_epoch=00000000_step=000000010000.ckpt"
+    # ckpt_file="/homes/kasram/broteina/proteina/checkpoints/proteina_v1.2_DFS_200M_notri.ckpt"
     print(f"{ckpt_file=}")
 
     model_designability = ModelDesignability()
     result = model_designability.compute_designability(ckpt_file)
 
-    if result is not None: 
-        print(result)
+    # print(result)
+    # if result is not None: 
+    #     print(result

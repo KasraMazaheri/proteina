@@ -213,3 +213,6 @@ class BaseLightningDataModule(L.LightningDataModule, ABC):
             clusterid_to_seqid_mapping=clusterid_to_seqid_mapping,
         )
         return test_dl
+
+    def predict_dataloader(self):
+        return self.train_dataloader()

@@ -1,0 +1,23 @@
+datamodule:
+  _target_: "proteinfoundation.datasets.pdb_data.PDBLightningDataModule"
+  data_dir: /dataset/pdb/ # Directory where the dataset is stored
+  in_memory: False
+  format: "pdb" # format for file download
+  overwrite: False # Whether to overwrite existing dataset files and reprocess the raw data
+  # arguments for BaseLightningDataModule class
+  batch_padding: True # whether we want a sparse PyG batch or a padded dense batch
+  sampling_mode: "random" # sample randomly inside each sequence similarity cluster during training
+  transforms: 
+    - _target_: "proteinfoundation.datasets.transforms.GlobalRotationTransform" # Transforms to apply to dataset examples
+    - _target_: "proteinfoundation.datasets.transforms.ChainBreakPerResidueTransform"
+    - _target_: "proteinfoundation.datasets.transforms.PaddingTransform" # To use torch.compile
+    # - _target_: "proteinfoundation.datasets.transforms.CATHLabelTransform" # activate for fold-conditional training
+    #   root_dir: ${oc.env:DATA_PATH}/cathdata/ # Root directory for CATH labels
+  batch_size: 16 # Batch size for dataloader
+  num_workers: 16 # Number of workers for dataloader
+  pin_memory: True # Pin memory for dataloader
+
+  datasplitter:
+    _target_: "proteinfoundation.datasets.pdb_data.PDBDataSplitter"
+    train_val_test: [1.0, 0.0, 0.0] # Cross-validation ratios to use for train, val, and test splits
+    split_type: "random" # Split sequences by sequence similarity clustering, other option is "random"

@@ -406,7 +406,7 @@ class PDBDataset(Dataset):
         if self.transform:
             graph = self.transform(graph)
 
-        return graph
+        return graph, fname
 
 
 class PDBLightningDataModule(BaseLightningDataModule):
