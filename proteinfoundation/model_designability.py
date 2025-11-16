@@ -239,10 +239,10 @@ class ModelDesignability:
         ), "Designability cannot be computed together with FID"
 
         # Set root path for this inference run
-        root_path = f"./inference/{config_name}"
-        if os.path.exists(root_path):
-            shutil.rmtree(root_path)
-        os.makedirs(root_path, exist_ok=True)
+        # root_path = f"./inference/{config_name}"
+        # if os.path.exists(root_path):
+        #     shutil.rmtree(root_path)
+        # os.makedirs(root_path, exist_ok=True)
 
         # Set seed
         logger.info(f"Seeding everything to seed {cfg.seed}")
@@ -321,33 +321,54 @@ class ModelDesignability:
         model.compute_designabilities = True
         predictions = self.trainer.predict(model, self.dataloader)
 
+        samples_dir = f"./samples/{ckpt_file.split('/')[-1][:-5]}/"
+
+        os.makedirs(samples_dir, exist_ok=True)
+        os.makedirs(samples_dir+"designable", exist_ok=True)
+        os.makedirs(samples_dir+"undesignable", exist_ok=True)
+
+        rank = self.trainer.global_rank
+
+        cnt = 0
+        for proteins,scores in predictions:
+            for i in range(len(scores)):
+                score = scores[i]
+                protein = proteins[i].cpu().numpy()
+                if score < 2:
+                    write_prot_to_pdb(protein, f"{samples_dir}designable/{rank}_{cnt}.pdb")
+                else:
+                    write_prot_to_pdb(protein, f"{samples_dir}undesignable/{rank}_{cnt}.pdb")
+                cnt += 1
+
         print(f"Rank: {self.trainer.global_rank=} finished predicting.")
         # return (torch.cat(predictions) < 2).to(torch.float32).mean().item()
 
-        all_predictions_on_rank = torch.cat(predictions)
-        target_device = self.trainer.strategy.root_device
-        all_predictions_on_rank = all_predictions_on_rank.to(target_device)
-        if self.trainer.world_size > 1:
-            all_gathered_predictions = self.trainer.strategy.all_gather(
-                all_predictions_on_rank
-            )
+        # scores = [prediction[1] for prediction in predictions]
 
-            # print(f"Rank {self.trainer.global_rank}: Type of all_gathered_predictions: {type(all_gathered_predictions)}")
-            # print(f"{all_gathered_predictions=}")
+        # all_predictions_on_rank = torch.cat(scores)
+        # target_device = self.trainer.strategy.root_device
+        # all_predictions_on_rank = all_predictions_on_rank.to(target_device)
+        # if self.trainer.world_size > 1:
+        #     all_gathered_predictions = self.trainer.strategy.all_gather(
+        #         all_predictions_on_rank
+        #     )
 
-            final_predictions = torch.cat(tuple(all_gathered_predictions))
-        else:
-            final_predictions = all_predictions_on_rank
+        #     # print(f"Rank {self.trainer.global_rank}: Type of all_gathered_predictions: {type(all_gathered_predictions)}")
+        #     # print(f"{all_gathered_predictions=}")
 
-        designability_score = (final_predictions < 2).float().mean().item()
-        if self.trainer.global_rank == 0:
-            return designability_score
-        else:
-            return None
+        #     final_predictions = torch.cat(tuple(all_gathered_predictions))
+        # else:
+        #     final_predictions = all_predictions_on_rank
+
+        # designability_score = (final_predictions < 2).float().mean().item()
+        # if self.trainer.global_rank == 0:
+        #     return designability_score
+        # else:
+        #     return None
 
 if __name__ == "__main__":
     # ckpt_file="/homes/kasram/broteina/proteina/store/train_run_1gpu_full_model_1/checkpoints/chk_epoch=00000000_step=000000010000.ckpt"
-    ckpt_file="/homes/kasram/broteina/proteina/checkpoints/proteina_v1.2_DFS_200M_notri.ckpt"
+    ckpt_file="./checkpoints/proteina_v1.2_DFS_200M_notri.ckpt"
     print(f"{ckpt_file=}")
 
     model_designability = ModelDesignability()

@@ -517,7 +517,7 @@ class ModelTrainerBase(L.LightningModule):
             fixed_structure_mask = fixed_structure_mask,
         )
         if self.compute_designabilities:
-            return self.designability.scRMSD(nm_to_ang(x))
+            return self.samples_to_atom37(x), self.designability.scRMSD(nm_to_ang(x))
         else:
             return self.samples_to_atom37(x)  # [b, n, 37, 3]
 
