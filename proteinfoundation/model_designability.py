@@ -205,6 +205,7 @@ class ModelDesignability:
             default=0,
             help="Leave as 0.",
         )
+        parser.add_argument('--ckpt_name', '-c', help='Name of the checkpoint to process', required=True)
         args = parser.parse_args()
         logger.info(" ".join(sys.argv))
 
@@ -367,8 +368,11 @@ class ModelDesignability:
         #     return None
 
 if __name__ == "__main__":
-    # ckpt_file="/homes/kasram/broteina/proteina/store/train_run_1gpu_full_model_1/checkpoints/chk_epoch=00000000_step=000000010000.ckpt"
-    ckpt_file="./checkpoints/proteina_v1.2_DFS_200M_notri.ckpt"
+    parser = argparse.ArgumentParser(description="Compute stats for a given checkpoint")
+    parser.add_argument('--ckpt_name', '-c', help='Name of the checkpoint to process', required=True)
+    args = parser.parse_args()
+    ckpt_name = args.ckpt_name
+    ckpt_file = f"./checkpoints/{ckpt_name}.ckpt"
     print(f"{ckpt_file=}")
 
     model_designability = ModelDesignability()
