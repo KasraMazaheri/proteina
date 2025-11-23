@@ -13,7 +13,7 @@ datamodule:
     - _target_: "proteinfoundation.datasets.transforms.PaddingTransform" # To use torch.compile
     # - _target_: "proteinfoundation.datasets.transforms.CATHLabelTransform" # activate for fold-conditional training
     #   root_dir: ${oc.env:DATA_PATH}/cathdata/ # Root directory for CATH labels
-  batch_size: 6 # Batch size for dataloader
+  batch_size: 4 # Batch size for dataloader
   num_workers: 16 # Number of workers for dataloader
   pin_memory: True # Pin memory for dataloader
 

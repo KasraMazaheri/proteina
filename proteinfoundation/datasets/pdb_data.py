@@ -607,7 +607,7 @@ class PDBLightningDataModule(BaseLightningDataModule):
             if self.dataselector:
                 file_identifier = self._get_file_identifier(self.dataselector)
             else:
-                file_identifier = f"custom_pdb"
+                file_identifier = f"designable_pdb"
 
             df_data_name = f"{file_identifier}.csv"
             logger.info(f"Loading dataset csv from {df_data_name}")
