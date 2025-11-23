@@ -24,7 +24,7 @@ self_cond: False
 # Sampling params only for CAFlow
 sampling_caflow:
   sampling_mode: vf  # Options are: vf (plain fow matching) or sc (using score, where parameters below matter)
-  sc_scale_noise: 0.4  # scale used to multiply noise if mode == sc
+  sc_scale_noise: 1.0  # scale used to multiply noise if mode == sc
   sc_scale_score: 1.0  # scale used to multiply score if mode == sc, not implemented yet
   gt_mode: "1/t"  # us, tan, or 1/t
   gt_p: 1.0  # float

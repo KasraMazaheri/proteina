@@ -205,6 +205,7 @@ class ModelDesignability:
             default=0,
             help="Leave as 0.",
         )
+        parser.add_argument('--ckpt_name', '-c', help='Name of the checkpoint to process', required=True)
         args = parser.parse_args()
         logger.info(" ".join(sys.argv))
 
@@ -239,10 +240,10 @@ class ModelDesignability:
         ), "Designability cannot be computed together with FID"
 
         # Set root path for this inference run
-        root_path = f"./inference/{config_name}"
-        if os.path.exists(root_path):
-            shutil.rmtree(root_path)
-        os.makedirs(root_path, exist_ok=True)
+        # root_path = f"./inference/{config_name}"
+        # if os.path.exists(root_path):
+        #     shutil.rmtree(root_path)
+        # os.makedirs(root_path, exist_ok=True)
 
         # Set seed
         logger.info(f"Seeding everything to seed {cfg.seed}")
@@ -321,38 +322,33 @@ class ModelDesignability:
         model.compute_designabilities = True
         predictions = self.trainer.predict(model, self.dataloader)
 
-        result = (torch.cat(predictions) < 2).float().mean().item()
-        print(f"Rank: {self.trainer.global_rank=} finished predicting. Result: {result}")
-        return result
+        samples_dir = f"./samples/{ckpt_file.split('/')[-1][:-5]}/"
 
-        all_predictions_on_rank = torch.cat(predictions)
-        target_device = self.trainer.strategy.root_device
-        all_predictions_on_rank = all_predictions_on_rank.to(target_device)
-        if self.trainer.world_size > 1:
-            all_gathered_predictions = self.trainer.strategy.all_gather(
-                all_predictions_on_rank
-            )
+        os.makedirs(samples_dir, exist_ok=True)
+        os.makedirs(samples_dir+"designable", exist_ok=True)
+        os.makedirs(samples_dir+"undesignable", exist_ok=True)
 
-            # print(f"Rank {self.trainer.global_rank}: Type of all_gathered_predictions: {type(all_gathered_predictions)}")
-            # print(f"{all_gathered_predictions=}")
+        rank = self.trainer.global_rank
 
-            final_predictions = torch.cat(tuple(all_gathered_predictions))
-        else:
-            final_predictions = all_predictions_on_rank
+        cnt = 0
+        for proteins,scores in predictions:
+            for i in range(len(scores)):
+                score = scores[i]
+                protein = proteins[i].cpu().numpy()
+                if score < 2:
+                    write_prot_to_pdb(protein, f"{samples_dir}designable/{rank}_{cnt}.pdb")
+                else:
+                    write_prot_to_pdb(protein, f"{samples_dir}undesignable/{rank}_{cnt}.pdb")
+                cnt += 1
 
-        designability_score = (final_predictions < 2).float().mean().item()
-        if self.trainer.global_rank == 0:
-            return designability_score
-        else:
-            return None
+        print(f"Rank: {self.trainer.global_rank=} finished predicting. Designability: {cnt / len(predictions)}")
 
 if __name__ == "__main__":
-    # ckpt_file="/homes/kasram/broteina/proteina/store/train_run_1gpu_full_model_1/checkpoints/chk_epoch=00000000_step=000000010000.ckpt"
-    # ckpt_file="/homes/kasram/broteina/proteina/checkpoints/proteina_v1.2_DFS_200M_notri.ckpt"
-    
-    # ckpt_file="/homes/kasram/broteina/proteina/store/train_run_8gpu_no_LORA_b5_designables_continued/checkpoints/last.ckpt"
-    ckpt_file="/homes/kasram/broteina/proteina/store/train_run_8gpu_from_scratch_no_LORA_b4_designables/checkpoints/last.ckpt"
-    
+    parser = argparse.ArgumentParser(description="Compute stats for a given checkpoint")
+    parser.add_argument('--ckpt_name', '-c', help='Name of the checkpoint to process', required=True)
+    args = parser.parse_args()
+    ckpt_name = args.ckpt_name
+    ckpt_file = f"./checkpoints/{ckpt_name}.ckpt"
     print(f"{ckpt_file=}")
 
     model_designability = ModelDesignability()
