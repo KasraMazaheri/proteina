@@ -321,8 +321,9 @@ class ModelDesignability:
         model.compute_designabilities = True
         predictions = self.trainer.predict(model, self.dataloader)
 
-        print(f"Rank: {self.trainer.global_rank=} finished predicting.")
-        # return (torch.cat(predictions) < 2).to(torch.float32).mean().item()
+        result = (torch.cat(predictions) < 2).float().mean().item()
+        print(f"Rank: {self.trainer.global_rank=} finished predicting. Result: {result}")
+        return result
 
         all_predictions_on_rank = torch.cat(predictions)
         target_device = self.trainer.strategy.root_device
@@ -347,11 +348,13 @@ class ModelDesignability:
 
 if __name__ == "__main__":
     # ckpt_file="/homes/kasram/broteina/proteina/store/train_run_1gpu_full_model_1/checkpoints/chk_epoch=00000000_step=000000010000.ckpt"
-    ckpt_file="/homes/kasram/broteina/proteina/checkpoints/proteina_v1.2_DFS_200M_notri.ckpt"
+    # ckpt_file="/homes/kasram/broteina/proteina/checkpoints/proteina_v1.2_DFS_200M_notri.ckpt"
+    
+    # ckpt_file="/homes/kasram/broteina/proteina/store/train_run_8gpu_no_LORA_b5_designables_continued/checkpoints/last.ckpt"
+    ckpt_file="/homes/kasram/broteina/proteina/store/train_run_8gpu_from_scratch_no_LORA_b4_designables/checkpoints/last.ckpt"
+    
     print(f"{ckpt_file=}")
 
     model_designability = ModelDesignability()
     result = model_designability.compute_designability(ckpt_file)
-
-    if result is not None: 
-        print(result)
+    
