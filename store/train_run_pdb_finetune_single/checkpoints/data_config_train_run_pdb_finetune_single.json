@@ -1,0 +1,55 @@
+{
+    "datamodule": {
+        "_target_": "proteinfoundation.datasets.pdb_data.PDBLightningDataModule",
+        "batch_padding": true,
+        "batch_size": 10,
+        "data_dir": "./proteina_additional_files/pdb_train/",
+        "dataselector": {
+            "_target_": "proteinfoundation.datasets.pdb_data.PDBDataSelector",
+            "best_resolution": 0.0,
+            "data_dir": "./proteina_additional_files/pdb_train/",
+            "exclude_ids": [],
+            "experiment_types": [
+                "diffraction",
+                "EM"
+            ],
+            "fraction": 0.0005,
+            "has_ligands": [],
+            "max_length": 256,
+            "min_length": 50,
+            "molecule_type": "protein",
+            "oligomeric_max": null,
+            "oligomeric_min": null,
+            "remove_ligands": [],
+            "remove_non_standard_residues": true,
+            "remove_pdb_unavailable": true,
+            "worst_resolution": 5.0
+        },
+        "datasplitter": {
+            "_target_": "proteinfoundation.datasets.pdb_data.PDBDataSplitter",
+            "data_dir": "./proteina_additional_files/pdb_train/",
+            "overwrite_sequence_clusters": false,
+            "split_sequence_similarity": 0.5,
+            "split_type": "sequence_similarity",
+            "train_val_test": [
+                0.98,
+                0.019,
+                0.001
+            ]
+        },
+        "format": "cif",
+        "in_memory": false,
+        "num_workers": 24,
+        "overwrite": false,
+        "pin_memory": true,
+        "sampling_mode": "cluster-random",
+        "transforms": [
+            {
+                "_target_": "proteinfoundation.datasets.transforms.GlobalRotationTransform"
+            },
+            {
+                "_target_": "proteinfoundation.datasets.transforms.ChainBreakPerResidueTransform"
+            }
+        ]
+    }
+}

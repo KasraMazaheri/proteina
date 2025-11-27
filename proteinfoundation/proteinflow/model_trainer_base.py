@@ -15,14 +15,14 @@ import re
 
 from abc import abstractmethod
 from functools import partial
-from typing import List, Literal
+from typing import List, Literal, Dict
 
 import lightning as L
 import numpy as np
 import torch
 from jaxtyping import Bool, Float
 from loguru import logger
-from torch import Dict, Tensor
+from torch import Tensor
 
 from proteinfoundation.utils.ff_utils.pdb_utils import mask_cath_code_by_level
 

@@ -1,0 +1,147 @@
+{
+    "dataset": "pdb_train",
+    "dataset_config_subdir": "pdb",
+    "ema": {
+        "cpu_offload": false,
+        "decay": 0.999,
+        "every_n_steps": 1,
+        "validate_original_weights": false
+    },
+    "force_precision_f32": false,
+    "hardware": {
+        "accelerator": "gpu",
+        "ncpus_per_task_prepro_": 32,
+        "ncpus_per_task_train_": 24,
+        "ngpus_per_node_": 1,
+        "nnodes_": 1
+    },
+    "log": {
+        "checkpoint": true,
+        "checkpoint_every_n_steps": 4000,
+        "last_ckpt_every_n_steps": 4000,
+        "log_wandb": true,
+        "wandb_project": "protein_transformer_big_runs"
+    },
+    "loss": {
+        "aux_loss_t_lim": 0.3,
+        "aux_loss_weight": 1.0,
+        "loss_t_clamp": 0.9,
+        "max_dist_boundary": 1.0,
+        "num_dist_buckets": 64,
+        "t_distribution": {
+            "name": "mix_up02_beta",
+            "p1": 1.9,
+            "p2": 1.0
+        },
+        "thres_aux_2d_loss": 0.6,
+        "use_aux_loss": true
+    },
+    "model": {
+        "augmentation": {
+            "global_rotation": true,
+            "naug_rot": 1
+        },
+        "name": "caflow",
+        "nn": {
+            "cath_code_dir": "./proteina_additional_files/pdb_raw/",
+            "dim_cond": 512,
+            "feats_cond_seq": [
+                "time_emb",
+                "fold_emb"
+            ],
+            "feats_init_seq": [
+                "res_seq_pdb_idx",
+                "x_sc",
+                "chain_break_per_res"
+            ],
+            "feats_pair_cond": [
+                "time_emb"
+            ],
+            "feats_pair_repr": [
+                "rel_seq_sep",
+                "x_sc_pair_dists",
+                "xt_pair_dists"
+            ],
+            "fold_emb_dim": 256,
+            "idx_emb_dim": 128,
+            "multilabel_mode": "sample",
+            "name": "ca_af3",
+            "nheads": 12,
+            "nlayers": 15,
+            "num_buckets_predict_pair": 64,
+            "num_registers": 10,
+            "pair_repr_dim": 512,
+            "parallel_mha_transition": false,
+            "residual_mha": true,
+            "residual_transition": true,
+            "seq_sep_dim": 127,
+            "strict_feats": false,
+            "t_emb_dim": 256,
+            "token_dim": 768,
+            "update_pair_repr": false,
+            "update_pair_repr_every_n": 3,
+            "use_attn_pair_bias": true,
+            "use_qkln": true,
+            "use_tri_mult": true,
+            "x_sc_pair_dist_dim": 128,
+            "x_sc_pair_dist_max": 3,
+            "x_sc_pair_dist_min": 0.1,
+            "xt_pair_dist_dim": 64,
+            "xt_pair_dist_max": 3,
+            "xt_pair_dist_min": 0.1
+        },
+        "target_pred": "v",
+        "validation": {
+            "ode": {
+                "gt_clamp_val": null,
+                "gt_mode": "1/t",
+                "gt_p": 1.0,
+                "sampling_mode": "vf",
+                "sc_scale_noise": 0.0,
+                "sc_scale_score": 0.0
+            },
+            "temp_035": {
+                "gt_clamp_val": null,
+                "gt_mode": "1/t",
+                "gt_p": 1.0,
+                "sampling_mode": "sc",
+                "sc_scale_noise": 0.35,
+                "sc_scale_score": 1.0
+            },
+            "temp_05": {
+                "gt_clamp_val": null,
+                "gt_mode": "1/t",
+                "gt_p": 1.0,
+                "sampling_mode": "sc",
+                "sc_scale_noise": 0.4,
+                "sc_scale_score": 1.0
+            }
+        }
+    },
+    "opt": {
+        "accumulate_grad_batches": 2,
+        "dist_strategy": "ddp",
+        "grad_and_weight_analysis": false,
+        "log_every_n_steps": 1,
+        "lr": 1e-05,
+        "max_epochs": 10,
+        "skip_nan_grad": false,
+        "val_check_interval": 400
+    },
+    "pretrain_ckpt_path": "./checkpoints/proteina_v1.2_DFS_200M_notri.ckpt",
+    "run_name_": "train_run_pdb_finetune_single",
+    "seed": 42,
+    "training": {
+        "fold_cond": false,
+        "fold_label_sample_ratio": [
+            0.5,
+            0.1,
+            0.15,
+            0.25
+        ],
+        "mask_A_prob": 0.7999999998933333,
+        "mask_C_prob": 0.8333333331944445,
+        "mask_T_prob": 0.75,
+        "self_cond": true
+    }
+}
