@@ -14,7 +14,7 @@ if __name__ == "__main__":
     num_undesignable = len([f for f in os.listdir(f"samples/{ckpt_name}/undesignable")])
     print("Designability:", num_designable / (num_designable + num_undesignable))
 
-    subprocess.run(f"foldseek easy-cluster samples/{ckpt_name} foldseek_tmp/{ckpt_name}/res foldseek_tmp/{ckpt_name} --alignment-type 1 --cov-mode 0 --min-seq-id 0 --tmscore-threshold 0.5", shell=True)
+    subprocess.run(f"foldseek easy-cluster samples/{ckpt_name}/designable foldseek_tmp/{ckpt_name}/res foldseek_tmp/{ckpt_name} --alignment-type 1 --cov-mode 0 --min-seq-id 0 --tmscore-threshold 0.5", shell=True)
 
-    df = pd.read_csv(f"foldseek_tmp/res/_cluster.tsv", sep="\t", header=None, names=["cluster", "protein"])
+    df = pd.read_csv(f"foldseek_tmp/{ckpt_name}/res_cluster.tsv", sep="\t", header=None, names=["cluster", "protein"])
     print("Diversity:", len(df["cluster"].unique()) / len(df))
