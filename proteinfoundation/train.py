@@ -205,7 +205,7 @@ if __name__ == "__main__":
     # Set logger
     wandb_logger = None
     if cfg_exp.log.log_wandb and not args.nolog:
-        wandb_logger = WandbLogger(project=cfg_exp.log.wandb_project, id=run_name)
+        wandb_logger = WandbLogger(project=cfg_exp.log.wandb_project, name=run_name, id=wandb.util.generate_id())
         callbacks.append(LogEpochTimeCallback())
         callbacks.append(LogSetpTimeCallback())
 
@@ -272,8 +272,14 @@ if __name__ == "__main__":
     pretrain_ckpt_path = cfg_exp.get("pretrain_ckpt_path", None)
     if last_ckpt_path is None and pretrain_ckpt_path is not None:
         log_info(f"Loading from pre-trained checkpoint path {pretrain_ckpt_path}")
-        ckpt = torch.load(pretrain_ckpt_path, map_location="cpu")
+        ckpt = torch.load(pretrain_ckpt_path, map_location="cpu", weights_only=False)
         model.load_state_dict(ckpt["state_dict"], strict=False)
+
+    with hydra.initialize(config_path="../configs/experiment_config", version_base=hydra.__version__):
+        cfg_inf = hydra.compose(config_name="inference_base")
+        log_info(f"Inference config {cfg_inf}")
+
+    model.configure_inference(cfg_inf, None)
 
     # Train
     plugins = []
