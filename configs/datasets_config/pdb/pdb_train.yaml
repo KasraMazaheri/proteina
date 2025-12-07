@@ -12,14 +12,14 @@ datamodule:
     - _target_: "proteinfoundation.datasets.transforms.ChainBreakPerResidueTransform"
     # - _target_: "proteinfoundation.datasets.transforms.CATHLabelTransform" # activate for fold-conditional training
     #   root_dir: ${oc.env:DATA_PATH}/cathdata/ # Root directory for CATH labels
-  batch_size: 10 # Batch size for dataloader
+  batch_size: 6 # Batch size for dataloader
   num_workers: 16 # Number of workers for dataloader
   pin_memory: True # Pin memory for dataloader
 
   dataselector:
     _target_: "proteinfoundation.datasets.pdb_data.PDBDataSelector"
     data_dir: ${oc.env:DATA_PATH}/pdb_train/ # Directory where the dataset is stored
-    fraction: 0.0005 # Fraction of dataset to use
+    fraction: 0.01 # Fraction of dataset to use
     molecule_type: "protein" # Type of molecule for which to select
     experiment_types: ["diffraction", "EM"] # other options are "NMR" and "other"
     min_length: 50 # Exclude peptides of length 50

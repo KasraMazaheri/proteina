@@ -26,6 +26,8 @@ from torch import Tensor
 
 from proteinfoundation.utils.ff_utils.pdb_utils import mask_cath_code_by_level
 
+from fast_designability import Designability
+from proteinfoundation.utils.coors_utils import nm_to_ang
 
 class ModelTrainerBase(L.LightningModule):
     def __init__(self, cfg_exp, store_dir=None):
@@ -50,6 +52,10 @@ class ModelTrainerBase(L.LightningModule):
         # For autoguidance, overridden in `self.configure_inference`
         self.nn_ag = None
         self.motif_conditioning = cfg_exp.training.get("motif_conditioning", False)
+
+        self.designability = None
+
+        L.seed_everything(cfg_exp.seed + self.global_rank)
 
     def configure_optimizers(self):
         optimizer = torch.optim.Adam(
@@ -446,6 +452,25 @@ class ModelTrainerBase(L.LightningModule):
         It also cleans results.
         """
         self.on_validation_epoch_end_data()
+        if self.inf_cfg.compute_designability:
+            if self.designability is None:
+                self.designability = Designability(self.device)
+            tot_designability = 0.0
+            for n in self.inf_cfg.nres_lens:
+                batch = {'nsamples': self.inf_cfg.nsamples_per_len, 'nres': n, 'dt': torch.tensor(self.inf_cfg.dt)}
+                with torch.no_grad():
+                    proteins, scores = self.predict_step(batch, None)
+                tot_designability += (scores < 2).to(dtype=torch.float32).mean().item() / len(self.inf_cfg.nres_lens)
+            print(f"{tot_designability=}")
+            self.log(
+                "validation/designability",
+                tot_designability,
+                on_step=False,
+                on_epoch=True,
+                prog_bar=False,
+                logger=True,
+                sync_dist=True,
+            )
 
     def on_validation_epoch_end_data(self):
         self.validation_output_data = []
@@ -507,7 +532,10 @@ class ModelTrainerBase(L.LightningModule):
             fixed_sequence_mask = fixed_sequence_mask,
             fixed_structure_mask = fixed_structure_mask,
         )
-        return self.samples_to_atom37(x)  # [b, n, 37, 3]
+        if self.inf_cfg.compute_designability:
+            return self.samples_to_atom37(x), self.designability.scRMSD(nm_to_ang(x))
+        else:
+            return self.samples_to_atom37(x)  # [b, n, 37, 3]
 
     def generate(
         self,

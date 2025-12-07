@@ -47,10 +47,10 @@ training:
 
 opt:
   lr: 0.00001 # 10X Smaller than pretraining
-  max_epochs: 10
+  max_epochs: 1
   log_every_n_steps: 1  # For wandb
   accumulate_grad_batches: 2
-  val_check_interval: 400  # Number of training steps after which we check validation loss
+  val_check_interval: 50  # Number of training steps after which we check validation loss
   skip_nan_grad: False  # Skip updates with nan gradient
   grad_and_weight_analysis: False  # Log some statistics of gradients and weights
   dist_strategy: ddp  # For multi GPU training, do not change
