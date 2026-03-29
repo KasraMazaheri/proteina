@@ -55,8 +55,6 @@ class ModelTrainerBase(L.LightningModule):
 
         self.designability = None
 
-        L.seed_everything(cfg_exp.seed + self.global_rank)
-
     def configure_optimizers(self):
         optimizer = torch.optim.Adam(
             [p for p in self.parameters() if p.requires_grad], lr=self.cfg_exp.opt.lr
@@ -138,6 +136,8 @@ class ModelTrainerBase(L.LightningModule):
         """
         if self.motif_conditioning and ("fixed_structure_mask" not in batch or "x_motif" not in batch):
             batch.update(self.motif_factory(batch, zeroes = True))  # for generation we have to pass conditioning info in. But for validation do the same as training
+        if self.motif_conditioning and "motif_mask" not in batch and "fixed_sequence_mask" in batch:
+            batch["motif_mask"] = batch["fixed_sequence_mask"]
 
         nn_out = self.nn(batch)
         x_pred = self._nn_out_to_x_clean(nn_out, batch)
@@ -455,6 +455,7 @@ class ModelTrainerBase(L.LightningModule):
         if self.inf_cfg.compute_designability:
             if self.designability is None:
                 self.designability = Designability(self.device)
+                L.seed_everything(self.cfg_exp.seed + self.global_rank)
             tot_designability = 0.0
             for n in self.inf_cfg.nres_lens:
                 batch = {'nsamples': self.inf_cfg.nsamples_per_len, 'nres': n, 'dt': torch.tensor(self.inf_cfg.dt)}
@@ -502,9 +503,9 @@ class ModelTrainerBase(L.LightningModule):
         
         mask = batch['mask'].squeeze(0) if 'mask' in batch else None
         if 'motif_seq_mask' in batch:
-            fixed_sequence_mask = batch['motif_seq_mask'].squeeze(0).to(self.device)
+            fixed_sequence_mask = batch['motif_seq_mask'].squeeze(0).to(self.device).bool()
             x_motif = batch['motif_structure'].squeeze(0).to(self.device)
-            fixed_structure_mask = fixed_sequence_mask[:, :, None] * fixed_sequence_mask[:, None, :]
+            fixed_structure_mask = (fixed_sequence_mask[:, :, None] * fixed_sequence_mask[:, None, :]).bool()
         else:
             fixed_sequence_mask, x_motif, fixed_structure_mask = None, None, None
             fixed_sequence_mask = None
@@ -532,6 +533,9 @@ class ModelTrainerBase(L.LightningModule):
             fixed_sequence_mask = fixed_sequence_mask,
             fixed_structure_mask = fixed_structure_mask,
         )
+        if self.designability is None:
+            self.designability = Designability(self.device)
+            L.seed_everything(self.cfg_exp.seed + self.global_rank)
         if self.inf_cfg.compute_designability:
             return self.samples_to_atom37(x), self.designability.scRMSD(nm_to_ang(x))
         else:

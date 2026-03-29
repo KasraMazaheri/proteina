@@ -509,6 +509,7 @@ class R3NFlowMatcher:
                         "t": t,
                         "mask": mask,
                         "motif_mask": fixed_sequence_mask,
+                        "fixed_sequence_mask": fixed_sequence_mask,
                         "fixed_structure_mask": fixed_structure_mask,
                         "x_motif": x_motif
                     }

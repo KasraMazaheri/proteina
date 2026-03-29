@@ -430,6 +430,8 @@ class MotifMaskSeqFeat(Feature):
     def forward(self, batch):
         if "motif_mask" in batch:
             return batch["motif_mask"].unsqueeze(-1)  # [b, n, 1]
+        elif "fixed_sequence_mask" in batch:
+            return batch["fixed_sequence_mask"].unsqueeze(-1)  # [b, n, 1]
         else:
             # If no motif
             x = batch["x_t"]

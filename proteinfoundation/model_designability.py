@@ -247,8 +247,7 @@ class ModelDesignability:
 
         # Set seed
         logger.info(f"Seeding everything to seed {cfg.seed}")
-        L.seed_everything(cfg.seed)
-
+        
         # Create length dataset
         nlens_dict = parse_nlens_cfg(cfg)
         lens_sample, nsamples = split_nlens(
@@ -322,7 +321,7 @@ class ModelDesignability:
         model.compute_designabilities = True
         predictions = self.trainer.predict(model, self.dataloader)
 
-        samples_dir = f"./samples/{ckpt_file.split('/')[-1][:-5]}/"
+        samples_dir = f"./samples/{ckpt_file.split('/')[-1][:-5]}/pdbs/"
 
         os.makedirs(samples_dir, exist_ok=True)
         os.makedirs(samples_dir+"designable", exist_ok=True)

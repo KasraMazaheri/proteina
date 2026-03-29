@@ -345,6 +345,7 @@ class SingleMotifFactory:
             motif_sequence_mask = torch.zeros((batch_size, num_residues), dtype = torch.bool)
             motif_structure_mask = torch.zeros((batch_size, num_residues, num_residues), dtype = torch.bool)
             result['fixed_sequence_mask'] = motif_sequence_mask.to(mask.device)
+            result['motif_mask'] = result['fixed_sequence_mask']
             result['fixed_structure_mask'] = motif_structure_mask.to(mask.device)
             result['x_motif'] = torch.zeros((batch_size, num_residues, 3)).to(mask.device)
             return result
@@ -389,6 +390,7 @@ class SingleMotifFactory:
         motif_sequence_masks = torch.nn.utils.rnn.pad_sequence(motif_sequence_masks, batch_first=True, padding_value=False)
         motif_structure_masks = motif_sequence_masks[:, :, None] * motif_sequence_masks[:, None, :]
         result['fixed_sequence_mask'] = motif_sequence_masks.to(mask.device)
+        result['motif_mask'] = result['fixed_sequence_mask']
         result['fixed_structure_mask'] = motif_structure_masks.to(mask.device)
         result['x_motif'] = x_1.clone()
         #! Center the conditional Motif
@@ -413,6 +415,7 @@ class SingleMotifFactory:
             motif_sequence_mask = torch.zeros((num_residues))
             motif_structure_mask = torch.zeros((num_residues, num_residues))
             result['fixed_sequence_mask'] = motif_sequence_mask
+            result['motif_mask'] = result['fixed_sequence_mask']
             result['fixed_structure_mask'] = motif_structure_mask
             return result
 
@@ -443,6 +446,7 @@ class SingleMotifFactory:
 
         # Update
         result['fixed_sequence_mask'] = motif_sequence_mask
+        result['motif_mask'] = result['fixed_sequence_mask']
         result['fixed_structure_mask'] = motif_structure_mask
 
         return result
@@ -475,4 +479,3 @@ if __name__ == "__main__":
     assert updated_batch["fixed_sequence_mask"].dtype == torch.bool
     assert updated_batch["fixed_structure_mask"].dtype == torch.bool
 
-    
