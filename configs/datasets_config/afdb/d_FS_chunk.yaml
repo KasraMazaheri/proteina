@@ -1,0 +1,19 @@
+datamodule:
+  _target_: "proteinfoundation.datasets.pdb_data.PDBLightningDataModule"
+  data_dir: ${oc.env:DATA_PATH}/d_FS/chunk_00/ # overridden per chunk in generate_motif_scaffold_dataset.py
+  in_memory: False
+  format: "pdb"
+  overwrite: False
+  batch_padding: True
+  sampling_mode: "random"
+  transforms:
+    - _target_: "proteinfoundation.datasets.transforms.GlobalRotationTransform"
+  batch_size: 16
+  num_workers: 4
+  pin_memory: True
+
+  datasplitter:
+    _target_: "proteinfoundation.datasets.pdb_data.PDBDataSplitter"
+    data_dir: ${oc.env:DATA_PATH}/d_FS/chunk_00/ # overridden per chunk
+    train_val_test: [0.999, 0.001, 0.0]
+    split_type: "random"

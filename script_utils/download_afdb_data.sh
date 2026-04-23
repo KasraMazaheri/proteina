@@ -31,25 +31,45 @@ command_exists() {
 }
 
 if command_exists aria2c; then
-    temp_input=$(mktemp)
-    while read -r filename; do
-        echo "https://alphafold.ebi.ac.uk/files/${filename}.pdb"
-        echo "  out=raw/${filename}.pdb"
-    done < "$index_file" > "$temp_input"
+    BATCH_SIZE=5000
 
-    aria2c --input-file="$temp_input" \
-        --max-concurrent-downloads=16 \
-        --max-connection-per-server=1 \
-        --split=1 \
-        --min-split-size=1M \
-        --continue=true \
-        --retry-wait=1 \
-        --max-tries=3 \
-        --console-log-level=warn \
-        --optimize-concurrent-downloads=true \
-        --file-allocation=none
+    # Build aria2c input for all missing files (two lines per entry: URL + out=)
+    echo "Scanning for missing files..."
+    all_input=$(mktemp)
+    comm -23 \
+        <(sort "$index_file") \
+        <(ls "$output_dir" 2>/dev/null | sed 's/\.pdb$//' | sort) \
+    | awk -v base="https://alphafold.ebi.ac.uk/files" \
+          '{printf "%s/%s.pdb\n  out=raw/%s.pdb\n", base, $1, $1}' \
+    > "$all_input"
 
-    rm -f "$temp_input"
+    total_missing=$(( $(wc -l < "$all_input") / 2 ))
+    echo "Files to download: $total_missing  (already on disk: $(ls "$output_dir" 2>/dev/null | wc -l))"
+
+    if [ "$total_missing" -gt 0 ]; then
+        # Split into chunks of BATCH_SIZE*2 lines (2 lines per file)
+        split -l $(( BATCH_SIZE * 2 )) "$all_input" "${all_input}_chunk_"
+        batch_num=0
+        for chunk in "${all_input}_chunk_"*; do
+            batch_num=$(( batch_num + 1 ))
+            n_chunk=$(( $(wc -l < "$chunk") / 2 ))
+            echo "Batch $batch_num: $n_chunk files"
+            aria2c --input-file="$chunk" \
+                --max-concurrent-downloads=16 \
+                --max-connection-per-server=1 \
+                --split=1 \
+                --min-split-size=1M \
+                --continue=true \
+                --retry-wait=2 \
+                --max-tries=3 \
+                --console-log-level=warn \
+                --optimize-concurrent-downloads=true \
+                --file-allocation=none || true
+            rm -f "$chunk"
+            echo "  -> $(ls "$output_dir" 2>/dev/null | wc -l) files on disk so far"
+        done
+    fi
+    rm -f "$all_input"
 else
     # Fallback code for curl/wget
     download_cmd=""
