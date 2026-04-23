@@ -1,5 +1,5 @@
 run_name_: motif_scaffolfing
-ckpt_path: path/to/checkpoint/directory
+ckpt_path: ./checkpoints
 ckpt_name: proteina_v1.7_DFS_60M_notri_motif_scaffolding.ckpt
 
 ncpus_: 24
