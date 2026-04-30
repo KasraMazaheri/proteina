@@ -30,6 +30,9 @@ def generate_combinations(min_cost, max_cost, ranges):
             result.append(padded_combination)
     return result
 
+def sample_combo(total_length, num_ranges):
+    seps = [0] + sorted(random.sample(range(1, total_length), num_ranges - 1)) + [total_length]
+    return [seps[i+1] - seps[i] for i in range(len(seps) - 1)]
 
 def generate_indices_and_mask_clean(contig: str, min_length: int, max_length: int) -> Tuple[int, List[int], np.ndarray]:
     """Index motif and scaffold positions by contig for sequence redesign.
@@ -79,10 +82,11 @@ def generate_indices_and_mask_clean(contig: str, min_length: int, max_length: in
             else:
                 length = int(part)
                 ranges.append(length)
-    combinations = generate_combinations(min_length - motif_length, max_length - motif_length, ranges)
-    if len(combinations) == 0:
-        raise ValueError("No Motif combinations to sample from please update the max and min lengths")
-    combo = random.choice(combinations)
+    # combinations = generate_combinations(min_length - motif_length, max_length - motif_length, ranges)
+    # if len(combinations) == 0:
+    #     raise ValueError("No Motif combinations to sample from please update the max and min lengths")
+    # combo = random.choice(combinations)
+    combo = sample_combo(min_length - motif_length, len(ranges))
     combo_idx = 0
     current_position = 1  # Start positions at 1 for 1-based indexing
     motif_indices = []
@@ -151,12 +155,9 @@ def save_motif_csv(pdb_path, motif_task_name, contigs, outpath = None, segment_o
     # Create a list of dictionaries to be converted into a DataFrame
     # Each dictionary represents a row in the CSV file
     data = [
-        {
-            'pdb_name': pdb_name, 
+        { 
             'sample_num': index, 
-            'contig': value,
-            'redesign_positions': ' ',
-            'segment_order': segment_order
+            'motif_placements': value,
         } 
         for index, value in enumerate(contigs)
     ]
@@ -164,7 +165,7 @@ def save_motif_csv(pdb_path, motif_task_name, contigs, outpath = None, segment_o
     # Convert the list of dictionaries into a DataFrame
     df = pd.DataFrame(data)
     if outpath is None:
-        outpath = f"./{motif_task_name}_motif_info.csv"
+        outpath = f"./scaffolds/{motif_task_name}/scaffold_info.csv"
     
     # Save the DataFrame to a CSV file
     df.to_csv(outpath, index=False)

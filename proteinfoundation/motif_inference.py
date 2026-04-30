@@ -141,7 +141,7 @@ class GenMotifDataset(Dataset):
             mask = [mask[i] for i in idx]
             x_motif = [x_motif[i] for i in idx]
             outstr = [outstr[i] for i in idx]
-        save_motif_csv(motif_pdb_path, motif_task_name, outstr, segment_order = segment_order)
+        save_motif_csv(motif_pdb_path, motif_task_name, outstr, outpath = f"{root_path}/scaffold_info.csv", segment_order = segment_order)
         return mask, x_motif
     
     def flatten_motif(self, max_nsamples: int):
@@ -265,6 +265,10 @@ if __name__ == "__main__":
         default=0,
         help="Leave as 0.",
     )
+    parser.add_argument(
+        '--motif_task_number',
+        type=int,
+    )
     args = parser.parse_args()
     logger.info(" ".join(sys.argv))
 
@@ -300,9 +304,9 @@ if __name__ == "__main__":
 
     # Set root path for this inference run
     root_path = f"./inference/{config_name}"
-    if os.path.exists(root_path):
-        shutil.rmtree(root_path)
-    os.makedirs(root_path, exist_ok=True)
+    # if os.path.exists(root_path):
+    #    shutil.rmtree(root_path)
+    # os.makedirs(root_path, exist_ok=True)
 
     # Load model from checkpoint
     ckpt_path = cfg.ckpt_path
@@ -326,8 +330,26 @@ if __name__ == "__main__":
         model_ag = Proteina.load_from_checkpoint(ckpt_ag_file)
         nn_ag = model_ag.nn
 
-    model.configure_inference(cfg, nn_ag=nn_ag)
+    if args.motif_task_number is not None:
+        test_cases = pd.read_csv("../MotifBench/test_cases.csv")
+        cfg.motif_task_name = test_cases.iloc[args.motif_task_number - 1]["pdb_id"]
+        cfg.motif_task_name = f"{args.motif_task_number:02d}_{cfg.motif_task_name}"
+        cfg.motif_pdb_path = f"../MotifBench/motif_pdbs/{cfg.motif_task_name}.pdb"
+        cfg.motif_min_length = int(test_cases.iloc[args.motif_task_number - 1]["length"])
+        cfg.motif_max_length = int(test_cases.iloc[args.motif_task_number - 1]["length"])
+        with open(cfg.motif_pdb_path, 'r') as f:
+            lines = f.readlines()
+            pre_contig = lines[1].strip().split()[-1]
+            sep = f"/0-{cfg.motif_min_length}/"
+            contig = sep[1:]
+            for seg, res in zip(pre_contig.split(";")[1::2], test_cases.iloc[args.motif_task_number - 1]["motif_residues"].split(";")):
+                contig += seg[0] + res[1:] + sep
+            cfg.contig_string = contig[:-1]
+            cfg.segment_order = ";".join(pre_contig.split(";")[1::2])
+        root_path = f"./scaffolds_{cfg.ckpt_name}_{cfg.sampling_caflow.sc_scale_noise}/{cfg.motif_task_name}"
+        os.makedirs(root_path, exist_ok=True)
 
+    model.configure_inference(cfg, nn_ag=nn_ag)
 
     dataset = GenMotifDataset(dt=cfg.dt,
                               nsamples=cfg.nsamples, 
@@ -358,10 +380,10 @@ if __name__ == "__main__":
     predictions = trainer.predict(model, dataloader)
 
     save_motif_predictions(
-            root_path, predictions, job_id=args.split_id, pdb_name=cfg.motif_task_name.split('_')[0] #cfg_gen.dataset.motif_pdb_path.split('/')[-1][:4]
+            root_path, predictions, job_id=args.split_id, pdb_name=cfg.motif_task_name #cfg_gen.dataset.motif_pdb_path.split('/')[-1][:4]
         )
-    import shutil
-    shutil.copy(f"./{cfg.motif_task_name.split('_')[0]}_motif_info.csv", root_path)
+    # import shutil
+    # shutil.copy(f"./{cfg.motif_task_name.split('_')[0]}_motif_info.csv", root_path)
     
     # Code for designability and
     # Store samples generated as pdbs and also scRMSD
@@ -416,6 +438,5 @@ if __name__ == "__main__":
         df = pd.DataFrame(results, columns=columns)
 
 
-    csv_file = os.path.join(root_path, "..", f"results_{config_name}.csv")
-    df.to_csv(csv_file, index=False)
-
+        csv_file = os.path.join(root_path, "..", f"results_{config_name}.csv")
+        df.to_csv(csv_file, index=False)
