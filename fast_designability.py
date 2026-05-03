@@ -210,7 +210,7 @@ class Designability:
 
         return all_seqs, grads
 
-    def scRMSD(self, proteins, return_grad = False):
+    def scRMSD(self, proteins, nres, return_grad = False):
 
         proteins.requires_grad_(return_grad)
         
@@ -218,29 +218,41 @@ class Designability:
         proteins_copied = proteins.repeat_interleave(ns, dim=0)
         with torch.set_grad_enabled(return_grad):
             seqs, log_prob_grads = self.proteinMPNN(proteins_copied, return_grad)
-        batch_size = min(20, len(seqs))
         rmsd_list = []
-        for i in range(0, len(seqs), batch_size):
-            batch_seqs = seqs[i:i+batch_size]
-            with torch.no_grad():
-                inputs = self.tokenizer(
-                    batch_seqs,
-                    return_tensors="pt",
-                    add_special_tokens=False,
-                    padding=True,
-                )
-                inputs = {k: inputs[k].to(self.device) for k in inputs}
+        if nres > 700:
+            esm_batch_size = 1
+        elif nres > 500:
+            esm_batch_size = 2
+        else:
+            esm_batch_size = 4
+        for i in range(0, len(seqs), ns):
+            batch_seqs = seqs[i:i+ns]
+            protein_idx = i // ns
+            for j in range(0, len(batch_seqs), esm_batch_size):
+                cur_batch_seqs = batch_seqs[j:j+esm_batch_size]
+                with torch.no_grad():
+                    inputs = self.tokenizer(
+                        cur_batch_seqs,
+                        return_tensors="pt",
+                        add_special_tokens=False,
+                        padding=True,
+                    )
+                    inputs = {k: inputs[k].to(self.device) for k in inputs}
 
-                outputs = self.esm_model(**inputs)
-                atom37_outputs = atom14_to_atom37(outputs["positions"][-1], outputs)
-                pred_positions = atom37_outputs[:, :, 1, :]
+                    outputs = self.esm_model(**inputs)
+                    atom37_outputs = atom14_to_atom37(outputs["positions"][-1], outputs)
+                    pred_positions = atom37_outputs[:, :, 1, :]
 
-            pred_positions.requires_grad_(return_grad)
+                pred_positions.requires_grad_(return_grad)
 
-            for j in range(len(pred_positions)):
-                coors_1, coors_2 = kabsch_align_ind(pred_positions[j], proteins[(i+j)//ns], ret_both=True)
-                sq_err = (coors_1 - coors_2) ** 2
-                rmsd_list.append(sq_err.sum(dim=-1).mean().sqrt())
+                for k in range(len(pred_positions)):
+                    coors_1, coors_2 = kabsch_align_ind(pred_positions[k], proteins[protein_idx], ret_both=True)
+                    sq_err = (coors_1 - coors_2) ** 2
+                    rmsd_list.append(sq_err.sum(dim=-1).mean().sqrt())
+
+            cur_rmsds = rmsd_list[-ns:]
+            opt = cur_rmsds.index(min(cur_rmsds))
+
 
         rmsd_list = torch.stack(rmsd_list)
         rmsd_list = rmsd_list.view(-1, ns)

@@ -1,0 +1,51 @@
+defaults:
+  - inference_base
+  - _self_
+
+run_name_: longer_dataset_len513_800
+ckpt_path: /homes/kasram/broteina/proteina/checkpoints
+ckpt_name: proteina_v1.6_DFS_200M_notri_long_chain_generation.ckpt
+
+seed: 20260419
+
+min_len: 513
+max_len: 800
+step_len: 1
+nres_lens:
+nsamples_per_len:
+max_nsamples: 1
+
+dt: 0.0025
+self_cond: True
+
+sampling_caflow:
+  sampling_mode: sc
+  sc_scale_noise: 0.35
+  sc_scale_score: 1.0
+  gt_mode: "1/t"
+  gt_p: 1.0
+  gt_clamp_val: null
+
+fold_cond: False
+guidance_weight: 1.0
+autoguidance_ratio: 0.0
+autoguidance_ckpt_path: null
+
+compute_designability: False
+compute_fid: False
+
+launcher:
+  total_samples: 55296
+  samples_per_length_per_gpu: 24
+  gpu_ids: [0, 1, 2, 3, 4, 5, 6, 7]
+  output_root: /homes/kasram/broteina/dataset/longer/raw
+  tmux_session_prefix: proteina_longer
+  generated_config_dir: /homes/kasram/broteina/proteina/configs/experiment_config/generated_longer_dataset
+  log_dir: /homes/kasram/broteina/proteina/logs/longer_dataset_sampling
+  resume: True
+
+worker:
+  worker_id: null
+  gpu_id: null
+  output_dir: null
+  length_tasks: []

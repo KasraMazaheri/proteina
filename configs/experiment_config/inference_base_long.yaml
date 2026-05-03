@@ -6,16 +6,16 @@ ncpus_: 8
 seed: 5
 
 # Lengths to sample. Uses `nres_lens` if specified, otherwise arange(min_len, max_len+1, step)
-nres_lens: [250, 200, 150, 100, 50] #[50, 100, 150, 200, 250]
+nres_lens: [800, 700, 600, 500, 400, 300]
 min_len:
 max_len:
 step_len:
 
 # Number of samples per protein length
-nsamples_per_len: 100
+nsamples_per_len: 16
 
 # Maximum number of samples in each batch
-max_nsamples: 5
+max_nsamples: 2
 
 # Sampling
 dt: 0.0025
@@ -60,7 +60,7 @@ lora:
 
 # Designability
 designability_seqs_per_struct: 8
-compute_designability: False
+compute_designability: True
 
 # FID-related metrics
 compute_fid: False

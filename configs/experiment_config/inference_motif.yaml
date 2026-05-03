@@ -4,6 +4,7 @@ ckpt_name: proteina_v1.7_DFS_60M_notri_motif_scaffolding.ckpt
 
 ncpus_: 24
 seed: 5
+precision: bf16
 
 nsamples: 2
 # Maximum number of samples in each batch

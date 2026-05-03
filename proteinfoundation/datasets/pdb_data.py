@@ -373,7 +373,12 @@ class PDBDataset(Dataset):
 
         if self.in_memory:
             logger.info("Reading data into memory")
-            self.data = [torch.load(self.processed_dir / "dataset" / f) for f in tqdm(file_names)]
+            self.data = []
+            for f in tqdm(file_names):
+                path = self.processed_dir / "dataset" / f
+                if not path.exists():
+                    path = self.processed_dir / f
+                self.data.append(torch.load(path, weights_only=False))
 
     def __len__(self):
         return len(self.file_names)
@@ -397,7 +402,10 @@ class PDBDataset(Dataset):
             else:
                 fname = f"{self.pdb_codes[idx]}.pt"
 
-            graph = torch.load(self.data_dir / "processed" / "dataset" / fname, weights_only=False)
+            graph_path = self.data_dir / "processed" / "dataset" / fname
+            if not graph_path.exists():
+                graph_path = self.data_dir / "processed" / fname
+            graph = torch.load(graph_path, weights_only=False)
 
         # reorder coords to be in OpenFold and not PDB convention
         graph.coords = graph.coords[:, PDB_TO_OPENFOLD_INDEX_TENSOR, :]
@@ -420,6 +428,7 @@ class PDBLightningDataModule(BaseLightningDataModule):
         overwrite: bool = False,
         store_het: bool = False,
         store_bfactor: bool = True,
+        file_identifier: Optional[str] = None,
         # arguments for BaseLightningDataModule
         batch_padding: bool = True,
         sampling_mode: Literal["random", "cluster-random", "cluster-reps"] = "random",
@@ -450,6 +459,8 @@ class PDBLightningDataModule(BaseLightningDataModule):
                 Defaults to False.
             store_bfactor (bool, optional): Whether to store B factors in the processed data.
                 Defaults to True.
+            file_identifier (str, optional): CSV stem to load from data_dir when no
+                dataselector is configured. Defaults to the local custom-dataset stem.
             batch_padding (bool, optional): Whether batches should be padded to a dense representation
                 with the length being either a pre-specified max length or the maximum length of the
                 sample in the batch (base PyTorch batch) or whether a sparse representation should be
@@ -491,6 +502,7 @@ class PDBLightningDataModule(BaseLightningDataModule):
         self.in_memory = in_memory
         self.store_het = store_het
         self.store_bfactor = store_bfactor
+        self.file_identifier = file_identifier
         self.df_data = None
         self.dfs_splits = None
         self.clusterid_to_seqid_mappings = None
@@ -607,7 +619,7 @@ class PDBLightningDataModule(BaseLightningDataModule):
             if self.dataselector:
                 file_identifier = self._get_file_identifier(self.dataselector)
             else:
-                file_identifier = f"uniform_pdb"
+                file_identifier = self.file_identifier or f"long_pdb"
 
             df_data_name = f"{file_identifier}.csv"
             logger.info(f"Loading dataset csv from {df_data_name}")

@@ -25,6 +25,9 @@
 
 set -euo pipefail
 
+REPO_DIR="$(cd "$(dirname "$0")/.." && pwd)"
+cd "$REPO_DIR"
+
 # ---- defaults ---------------------------------------------------------------
 MODE="foldseek"
 THREADS=16
@@ -48,6 +51,10 @@ if [ -z "$DATA_PATH" ]; then
     DATA_PATH="${DATA_PATH:-./proteina_additional_files}"
 fi
 
+if [[ "$DATA_PATH" != /* ]]; then
+    DATA_PATH="$REPO_DIR/$DATA_PATH"
+fi
+
 DFS_DIR="$DATA_PATH/d_FS"
 RAW_DIR="$DFS_DIR/raw"
 TMP_DIR="$DATA_PATH/tmp_foldseek"
@@ -67,7 +74,7 @@ if [ "$MODE" = "foldseek" ]; then
     if ! command -v foldseek &>/dev/null; then
         echo "ERROR: 'foldseek' not found in PATH."
         echo "Activate your conda environment first, e.g.:"
-        echo "  conda activate ~/proteins_project/proteina_env"
+        echo "  source \"\$(conda info --base)/etc/profile.d/conda.sh\" && conda activate proteina_env"
         exit 1
     fi
 
@@ -127,7 +134,5 @@ fi
 
 echo ""
 echo "Next: run the generation pipeline:"
-echo "  python script_utils/generate_motif_scaffold_dataset.py \\"
-echo "    --data_dir $DFS_DIR \\"
-echo "    --output_dir ./synthetic_motif_scaffold_dataset \\"
-echo "    --n_pairs 10000"
+echo "  bash script_utils/prepare_afdb_chunks.sh"
+echo "  OUTPUT_DIR=/homes/kasram/broteina/dataset/motif_scaffold/raw bash script_utils/generate_motif_scaffold_dataset.sh"

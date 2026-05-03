@@ -27,6 +27,7 @@ from torch import Tensor
 from proteinfoundation.utils.ff_utils.pdb_utils import mask_cath_code_by_level
 
 from fast_designability import Designability
+from proteinfoundation.utils.align_utils.align_utils import mean_w_mask
 from proteinfoundation.utils.coors_utils import nm_to_ang
 
 class ModelTrainerBase(L.LightningModule):
@@ -254,8 +255,33 @@ class ModelTrainerBase(L.LightningModule):
         )
         
         if self.motif_conditioning:
-            batch.update(self.motif_factory(batch))
-            x_1 = batch["x_1"] # we need this since we change x_1 based n the motif center
+            use_provided_motifs = self.cfg_exp.training.get("use_provided_motifs", False)
+            if use_provided_motifs:
+                if "fixed_sequence_mask" not in batch or "x_motif" not in batch:
+                    raise ValueError(
+                        "Motif-conditioned training with use_provided_motifs=True requires "
+                        "'fixed_sequence_mask' and 'x_motif' in the batch"
+                    )
+                if "motif_mask" not in batch:
+                    batch["motif_mask"] = batch["fixed_sequence_mask"]
+                if "fixed_structure_mask" not in batch:
+                    batch["fixed_structure_mask"] = (
+                        batch["fixed_sequence_mask"][:, :, None]
+                        * batch["fixed_sequence_mask"][:, None, :]
+                    ).bool()
+                batch["x_motif"] = (
+                    batch["x_motif"]
+                    - mean_w_mask(
+                        batch["x_motif"], batch["fixed_sequence_mask"], keepdim=True
+                    )
+                ) * batch["fixed_sequence_mask"][..., None]
+                x_1 = (
+                    x_1 - mean_w_mask(x_1, batch["fixed_sequence_mask"], keepdim=True)
+                ) * mask[..., None]
+                batch["x_1"] = x_1
+            else:
+                batch.update(self.motif_factory(batch))
+                x_1 = batch["x_1"] # we need this since we change x_1 based n the motif center
         # Interpolation
         x_t = self.fm.interpolate(x_0, x_1, t)
         # Add a few things to batch, needed for nn
@@ -537,7 +563,7 @@ class ModelTrainerBase(L.LightningModule):
             self.designability = Designability(self.device)
             L.seed_everything(self.cfg_exp.seed + self.global_rank)
         if self.inf_cfg.compute_designability:
-            return self.samples_to_atom37(x), self.designability.scRMSD(nm_to_ang(x))
+            return self.samples_to_atom37(x), self.designability.scRMSD(nm_to_ang(x), batch["nres"].item())
         else:
             return self.samples_to_atom37(x)  # [b, n, 37, 3]
 

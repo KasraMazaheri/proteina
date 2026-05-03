@@ -1,30 +1,32 @@
 #!/usr/bin/env bash
-# SPDX-FileCopyrightText: Copyright (c) 2025 NVIDIA CORPORATION & AFFILIATES. All rights reserved.
-# SPDX-License-Identifier: LicenseRef-NvidiaProprietary
-#
-# One-time preprocessing: split AFDB CIFs into 8 chunk subdirs and convert to PDB.
-# Run this before launching generate_motif_scaffold_dataset.sh.
-#
-# Usage:
-#   sbatch script_utils/prepare_afdb_chunks.sh
+# One-time local preprocessing: split AFDB CIFs into chunk subdirs and convert
+# them to PDB. This intentionally does not use Slurm.
 
-#SBATCH --job-name=proteina_prepare_chunks
-#SBATCH --partition=xeon-p8
-#SBATCH --cpus-per-task=32
-#SBATCH --mem=64G
-#SBATCH --time=12:00:00
-#SBATCH --output=logs/prepare_chunks_%j.out
-#SBATCH --error=logs/prepare_chunks_%j.err
+set -eo pipefail
 
-set -euo pipefail
-
-REPO_DIR="${SLURM_SUBMIT_DIR:-$(cd "$(dirname "$0")/.." && pwd)}"
+REPO_DIR="$(cd "$(dirname "$0")/.." && pwd)"
 cd "$REPO_DIR"
 
-echo "Node: $(hostname)"
-echo "CPUs: $SLURM_CPUS_PER_TASK"
+N_CHUNKS="${N_CHUNKS:-8}"
+NUM_WORKERS="${NUM_WORKERS:-$(nproc)}"
+DATA_PATH_ARG="${DATA_PATH_ARG:-}"
 
-conda run -p ~/proteins_project/proteina_env \
-    python3 "$REPO_DIR/script_utils/prepare_afdb_chunks.py" \
-        --n_chunks 8 \
-        --num_workers "${SLURM_CPUS_PER_TASK:-32}"
+source "$(conda info --base)/etc/profile.d/conda.sh"
+conda activate proteina_env
+
+echo "Repo       : $REPO_DIR"
+echo "Node       : $(hostname)"
+echo "Chunks     : $N_CHUNKS"
+echo "Workers    : $NUM_WORKERS"
+
+cmd=(
+    python "$REPO_DIR/script_utils/prepare_afdb_chunks.py"
+    --n_chunks "$N_CHUNKS"
+    --num_workers "$NUM_WORKERS"
+)
+
+if [[ -n "$DATA_PATH_ARG" ]]; then
+    cmd+=(--data_path "$DATA_PATH_ARG")
+fi
+
+"${cmd[@]}"

@@ -1,0 +1,19 @@
+launcher:
+  dataset_root: /homes/kasram/broteina/dataset/des/designable
+  gpu_ids: [0, 1, 2, 3, 4, 5, 6, 7]
+  generated_config_dir: /homes/kasram/broteina/proteina/configs/experiment_config/generated_secondary_structure_eval
+  log_dir: /homes/kasram/broteina/proteina/logs/secondary_structure_eval
+  tmux_session_prefix: proteina_ss_eval
+  poll_interval_sec: 20
+  idle_exit_after_sec: 600
+  min_file_age_sec: 15
+  watch: true
+
+worker:
+  worker_id: null
+  dataset_id: null
+  dataset_dir: null
+  csv_path: null
+
+secondary_structure:
+  flush_every: 1000

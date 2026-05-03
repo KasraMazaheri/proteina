@@ -1,0 +1,49 @@
+launcher:
+  gpu_ids: [0, 1, 2, 3, 4, 5, 6, 7]
+  raw_root: /homes/kasram/broteina/dataset/des/raw
+  designable_root: /homes/kasram/broteina/dataset/des/designable
+  undesignable_root: /homes/kasram/broteina/dataset/des/undesignable
+  state_root: /homes/kasram/broteina/dataset/des/state
+  generated_config_dir: /homes/kasram/broteina/proteina/configs/experiment_config/generated_designability_eval
+  log_dir: /homes/kasram/broteina/proteina/logs/designability_eval
+  tmux_session_prefix: proteina_des_eval
+  resume: true
+  poll_interval_sec: 20
+  idle_exit_after_sec: 1800
+  min_file_age_sec: 15
+  watch: true
+  partition_mod: 3
+  partition_rem: 0
+  state_suffix: part0
+  min_length_prefix: 30
+  max_length_prefix: 269
+  target_designable_per_length: 180
+
+worker:
+  worker_id: null
+  gpu_id: null
+  raw_dir: null
+  designable_dir: null
+  undesignable_dir: null
+  state_file: null
+  error_file: null
+  partition_mod: null
+  partition_rem: null
+  state_suffix: null
+
+designability:
+  score_threshold: 2.0
+  eval_batch_size: 20
+  max_batches_per_length_per_cycle: 2
+  num_seq_per_target: 8
+  sampling_temp: "0.1"
+  pmpnn_batch_size: 200
+  model_name: v_48_020
+  path_to_model_weights: ""
+  esmfold_model_name: facebook/esmfold_v1
+  esmfold_cache_dir: null
+  suppress_print: 1
+  ca_only: true
+  use_soluble_model: false
+  backbone_noise: 0.0
+  seed: 0

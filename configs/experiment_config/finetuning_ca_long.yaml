@@ -1,4 +1,4 @@
-run_name_: neurips_finetune_A6000_8gpu_selfd
+run_name_: neurips_finetune_A6000_8gpu_selfd_long
 
 hardware:
   ncpus_per_task_train_: 24  # Number of CPUs per tast during training
@@ -30,15 +30,13 @@ defaults:
   - _self_
 
 # Dataset params
-dataset: pdb_train
+dataset: pdb_train_long
 dataset_config_subdir: broteina
 
 force_precision_f32: False  # If false will use bf16-mixed precision
 
-# pretrain_ckpt_path: /homes/kasram/broteina/proteina/store/neurips_finetune_A6000_8gpu_uniform/checkpoints/chk_epoch=00000004_step=000000028000.ckpt
-pretrain_ckpt_path: /homes/kasram/broteina/proteina/checkpoints/proteina_v1.2_DFS_200M_notri.ckpt
-# pretrain_ckpt_path: /homes/kasram/broteina/proteina/store/train_run_8gpu_no_LORA_b5_designables/checkpoints/last.ckpt
-# pretrain_ckpt_path: /homes/kasram/broteina/proteina/store/rebuttal_finetune_A6000_8gpu_uniform_contd/checkpoints/last.ckpt
+pretrain_ckpt_path: /homes/kasram/broteina/proteina/store/neurips_finetune_A6000_8gpu_selfd/checkpoints/chk_epoch=00000004_step=000000028000.ckpt
+# pretrain_ckpt_path: /homes/kasram/broteina/proteina/checkpoints/proteina_v1.2_DFS_200M_notri.ckpt
 
 # lora:
 #   r: 16
@@ -58,7 +56,7 @@ opt:
   lr: 0.0001 # 10x lower than training
   max_epochs: 20 # 10 for fine-tuning
   log_every_n_steps: 1  # For wandb
-  accumulate_grad_batches: 4
+  accumulate_grad_batches: 8
   val_check_interval: 400  # Number of training steps after which we check validation loss
   skip_nan_grad: False  # Skip updates with nan gradient
   grad_and_weight_analysis: False  # Log some statistics of gradients and weights

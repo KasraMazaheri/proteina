@@ -30,6 +30,32 @@ from proteinfoundation.metrics.metric_factory import (
 from proteinfoundation.proteinflow.proteina import Proteina
 from proteinfoundation.utils.ff_utils.pdb_utils import mask_cath_code_by_level, write_prot_to_pdb
 
+
+EVAL_CONFIG_BY_LENGTH = {
+    "short": "inference_base",
+    "long": "inference_base_long",
+}
+
+PDB_SUBDIR_BY_LENGTH = {
+    "short": "pdbs",
+    "long": "pdbs_long",
+}
+
+
+def sc_suffix(sc_scale_noise):
+    sc = float(sc_scale_noise)
+    return "" if sc == 1.0 else f"_sc_{sc:g}"
+
+
+def samples_pdb_subdir(eval_length: str) -> str:
+    return PDB_SUBDIR_BY_LENGTH[eval_length]
+
+
+def resolve_eval_config_name(eval_length: str, explicit_config_name: str) -> str:
+    if explicit_config_name != "inference_base":
+        return explicit_config_name
+    return EVAL_CONFIG_BY_LENGTH[eval_length]
+
 class GenDataset(Dataset):
     """
     Dataset that indicates length of the proteins to generate,
@@ -179,16 +205,30 @@ def parse_len_cath_code(cfg):
 
 class ModelDesignability:
 
-    def __init__(self):
+    def __init__(self, args=None):
 
         load_dotenv()
 
         parser = argparse.ArgumentParser(description="Job info")
         parser.add_argument(
+            "--eval_length",
+            "--eval-length",
+            choices=["short", "long"],
+            default="short",
+            help="Use short proteins via inference_base or long proteins via inference_base_long.",
+        )
+        parser.add_argument(
             "--config_name",
             type=str,
             default="inference_base",
-            help="Name of the config yaml file.",
+            help="Name of the config yaml file. Defaults to inference_base for short and inference_base_long for long.",
+        )
+        parser.add_argument(
+            "--noise_scale",
+            "--noise-scale",
+            type=float,
+            default=None,
+            help="Optional override for sampling_caflow.sc_scale_noise. Defaults to the selected config value.",
         )
         parser.add_argument(
             "--config_number", type=int, default=-1, help="Number of the config yaml file."
@@ -206,7 +246,7 @@ class ModelDesignability:
             help="Leave as 0.",
         )
         parser.add_argument('--ckpt_name', '-c', help='Name of the checkpoint to process', required=True)
-        args = parser.parse_args()
+        args = parser.parse_args(args=args)
         logger.info(" ".join(sys.argv))
 
         assert (
@@ -230,8 +270,10 @@ class ModelDesignability:
             if args.config_number != -1:
                 config_name = f"inf_{args.config_number}"
             else:
-                config_name = args.config_name
+                config_name = resolve_eval_config_name(args.eval_length, args.config_name)
             cfg = hydra.compose(config_name=config_name)
+            if args.noise_scale is not None:
+                cfg.sampling_caflow.sc_scale_noise = float(args.noise_scale)
             logger.info(f"Inference config {cfg}")
             run_name = cfg.run_name_
 
@@ -278,9 +320,10 @@ class ModelDesignability:
         # Sample the model
         self.trainer = L.Trainer(accelerator="gpu", devices=torch.cuda.device_count())
         self.cfg = cfg
+        self.eval_length = args.eval_length
+        self.pdb_subdir = samples_pdb_subdir(args.eval_length)
 
-    def compute_designability(self, ckpt_file):
-
+    def compute_designability(self, ckpt_file, ckpt_name):
         # Load model from checkpoint
         logger.info(f"Using checkpoint {ckpt_file}")
         assert os.path.exists(ckpt_file), f"Not a valid checkpoint {ckpt_file}"
@@ -321,7 +364,9 @@ class ModelDesignability:
         model.compute_designabilities = True
         predictions = self.trainer.predict(model, self.dataloader)
 
-        samples_dir = f"./samples/{ckpt_file.split('/')[-1][:-5]}/pdbs/"
+        # samples_dir = f"./samples/neurips/{ckpt_file.split('/')[-1][:-5]}/pdbs/"
+        _sc = sc_suffix(self.cfg["sampling_caflow"]["sc_scale_noise"])
+        samples_dir = f"./samples/neurips/{ckpt_name}{_sc}/{self.pdb_subdir}/"
 
         os.makedirs(samples_dir, exist_ok=True)
         os.makedirs(samples_dir+"designable", exist_ok=True)
@@ -345,11 +390,37 @@ class ModelDesignability:
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Compute stats for a given checkpoint")
     parser.add_argument('--ckpt_name', '-c', help='Name of the checkpoint to process', required=True)
+    parser.add_argument(
+        "--eval_length",
+        "--eval-length",
+        choices=["short", "long"],
+        default="short",
+        help="Use short proteins via inference_base or long proteins via inference_base_long.",
+    )
+    parser.add_argument(
+        "--config_name",
+        type=str,
+        default="inference_base",
+        help="Optional explicit config yaml file name.",
+    )
+    parser.add_argument(
+        "--noise_scale",
+        "--noise-scale",
+        type=float,
+        default=None,
+        help="Optional override for sampling_caflow.sc_scale_noise.",
+    )
+    parser.add_argument("--config_number", type=int, default=-1)
+    parser.add_argument("--config_subdir", type=str)
+    parser.add_argument("--split_id", type=int, default=0)
     args = parser.parse_args()
     ckpt_name = args.ckpt_name
-    ckpt_file = f"./checkpoints/{ckpt_name}.ckpt"
+    # ckpt_file = f"./checkpoints/{ckpt_name}.ckpt"
+    ckpt_file = f"/homes/kasram/broteina/proteina/store/{ckpt_name}.ckpt"
+    ckpt_name = ckpt_name.replace("/", "_")
     print(f"{ckpt_file=}")
+    print(f"{ckpt_name=}")
 
     model_designability = ModelDesignability()
-    result = model_designability.compute_designability(ckpt_file)
+    result = model_designability.compute_designability(ckpt_file, ckpt_name)
     

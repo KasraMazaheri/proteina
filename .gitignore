@@ -29,3 +29,9 @@ proteina_additional_files/*
 __MACOSX/*
 proteinfoundation.egg-info/*
 store/*
+foldseek_tmp/*
+samples/*
+samples_metrics/*
+configs/experiment_config/generated_*
+logs/
+logs.txt

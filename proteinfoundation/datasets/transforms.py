@@ -195,6 +195,8 @@ class GlobalRotationTransform(T.BaseTransform):
         else:
             raise ValueError(f"Rotation strategy {self.rotation_strategy} not supported")
         graph.coords = torch.matmul(graph.coords, rot)
+        if hasattr(graph, "x_motif"):
+            graph.x_motif = torch.matmul(graph.x_motif, rot)
         return graph
 
 

@@ -1,6 +1,6 @@
 datamodule:
   _target_: "proteinfoundation.datasets.pdb_data.PDBLightningDataModule"
-  data_dir: /homes/kasram/broteina/dataset/des/full_dataset/ # Directory where the dataset is stored
+  data_dir: /homes/kasram/broteina/dataset/long/ # Directory where the dataset is stored
   in_memory: False
   format: "pdb" # format for file download
   overwrite: False # Whether to overwrite existing dataset files and reprocess the raw data
@@ -13,7 +13,7 @@ datamodule:
     # - _target_: "proteinfoundation.datasets.transforms.PaddingTransform" # To use torch.compile
     # - _target_: "proteinfoundation.datasets.transforms.CATHLabelTransform" # activate for fold-conditional training
     #   root_dir: ${oc.env:DATA_PATH}/cathdata/ # Root directory for CATH labels
-  batch_size: 4 # Batch size for dataloader
+  batch_size: 1 # Batch size for dataloader
   num_workers: 8 # Number of workers for dataloader
   pin_memory: True # Pin memory for dataloader
 
