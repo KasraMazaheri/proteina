@@ -23,3 +23,14 @@ wandb/
 tmp/*
 *.fasta
 inference/*
+build/*
+__MACOSX/
+configs/experiment_config/generated*/
+foldseek_tmp/
+proteina_additional_files/
+samples*/
+*.egg0info
+*.egg-info
+logs/
+store/
+inference_runs/
