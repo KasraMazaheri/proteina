@@ -269,6 +269,30 @@ if __name__ == "__main__":
         '--motif_task_number',
         type=int,
     )
+    parser.add_argument(
+        "--output_root",
+        type=str,
+        default=None,
+        help="Optional override for the full task output directory.",
+    )
+    parser.add_argument(
+        "--output_root_base",
+        type=str,
+        default="./inference_runs",
+        help="Base directory under which motif outputs are written as <ckpt_name>_sc_<temp>/<task_name>/.",
+    )
+    parser.add_argument(
+        "--ckpt_name",
+        type=str,
+        default=None,
+        help="Optional override for cfg.ckpt_name from the inference config.",
+    )
+    parser.add_argument(
+        "--sc_scale_noise",
+        type=float,
+        default=None,
+        help="Optional override for cfg.sampling_caflow.sc_scale_noise from the inference config.",
+    )
     args = parser.parse_args()
     logger.info(" ".join(sys.argv))
 
@@ -297,6 +321,11 @@ if __name__ == "__main__":
         cfg = hydra.compose(config_name=config_name)
         logger.info(f"Inference config {cfg}")
         run_name = cfg.run_name_
+
+    if args.ckpt_name is not None:
+        cfg.ckpt_name = args.ckpt_name
+    if args.sc_scale_noise is not None:
+        cfg.sampling_caflow.sc_scale_noise = args.sc_scale_noise
 
     assert (
         not cfg.compute_designability or not cfg.compute_fid
@@ -346,7 +375,11 @@ if __name__ == "__main__":
                 contig += seg[0] + res[1:] + sep
             cfg.contig_string = contig[:-1]
             cfg.segment_order = ";".join(pre_contig.split(";")[1::2])
-        root_path = f"./scaffolds_{cfg.ckpt_name}_{cfg.sampling_caflow.sc_scale_noise}/{cfg.motif_task_name}"
+        if args.output_root is not None:
+            root_path = args.output_root
+        else:
+            run_dir = f"{cfg.ckpt_name}_sc_{cfg.sampling_caflow.sc_scale_noise}"
+            root_path = os.path.join(args.output_root_base, run_dir, cfg.motif_task_name)
         os.makedirs(root_path, exist_ok=True)
 
     model.configure_inference(cfg, nn_ag=nn_ag)

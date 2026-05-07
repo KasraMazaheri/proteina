@@ -27,6 +27,10 @@ from torch_geometric import transforms as T
 import lightning as L
 
 from proteinfoundation.metrics.metric_factory import GenerationMetricFactory, generation_metric_from_list
+from proteinfoundation.metrics.distributional_eval import (
+    format_distributional_metrics,
+    summarize_distributional_metrics,
+)
 
 
 if __name__ == "__main__":
@@ -37,7 +41,11 @@ if __name__ == "__main__":
     parser.add_argument("--num_workers", type=int, default=32, help="Number of workers for data loading.")
     args = parser.parse_args()
 
-    pdb_list = [os.path.join(args.data_dir, f) for f in os.listdir(args.data_dir)]
+    pdb_list = [
+        os.path.join(args.data_dir, f)
+        for f in sorted(os.listdir(args.data_dir))
+        if f.endswith(".pdb")
+    ]
 
     data_path = os.environ["DATA_PATH"]
     model_name = "gearnet_ca.pth" if args.ca_only else "gearnet.pth"
@@ -83,4 +91,11 @@ if __name__ == "__main__":
     )
     results.update(metric)
 
+    paper_results = format_distributional_metrics(
+        summarize_distributional_metrics(results)
+    )
+
+    print("Raw metrics:")
     print(pprint.pformat(results))
+    print("\nPaper-style distributional metrics:")
+    print(pprint.pformat(paper_results))

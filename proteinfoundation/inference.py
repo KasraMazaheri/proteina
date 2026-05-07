@@ -19,6 +19,7 @@ import argparse
 import random
 import shutil
 import loralib as lora
+from pathlib import Path
 
 import hydra
 import lightning as L
@@ -36,6 +37,10 @@ from proteinfoundation.metrics.designability import scRMSD
 from proteinfoundation.metrics.metric_factory import (
     GenerationMetricFactory,
     generation_metric_from_list,
+)
+from proteinfoundation.metrics.distributional_eval import (
+    format_distributional_metrics,
+    summarize_distributional_metrics,
 )
 from proteinfoundation.proteinflow.proteina import Proteina
 from proteinfoundation.utils.ff_utils.pdb_utils import mask_cath_code_by_level, write_prot_to_pdb
@@ -131,13 +136,14 @@ def split_nlens(nlens_dict, max_nsamples=16, n_replica=1):
             else:
                 nsamples.append(cnt - i)
 
-    max_nsamples = max(nsamples)
-    for i in range(len(nsamples)):
-        nsamples[i] += max_nsamples - nsamples[i]
+    if n_replica > 1:
+        max_nsamples = max(nsamples)
+        for i in range(len(nsamples)):
+            nsamples[i] += max_nsamples - nsamples[i]
 
-    while len(lens_sample) % n_replica != 0:
-        lens_sample.append(lens_sample[-1])
-        nsamples.append(max_nsamples)
+        while len(lens_sample) % n_replica != 0:
+            lens_sample.append(lens_sample[-1])
+            nsamples.append(max_nsamples)
 
     return lens_sample, nsamples
 
@@ -190,6 +196,29 @@ def parse_len_cath_code(cfg):
     return len_cath_codes
 
 
+def set_inference_seed(base_seed: int, split_id: int = 0, seed_stride: int = 1000003):
+    """
+    Set all RNGs explicitly for inference.
+
+    A plain `L.seed_everything(base_seed)` is not enough when running multiple
+    independent shard jobs, because each process would otherwise begin from the
+    same RNG state. We offset each shard deterministically.
+    """
+    effective_seed = int(base_seed) + int(split_id) * int(seed_stride)
+    logger.info(
+        f"Seeding inference with base_seed={base_seed}, split_id={split_id}, "
+        f"seed_stride={seed_stride}, effective_seed={effective_seed}"
+    )
+    L.seed_everything(effective_seed, workers=True)
+    random.seed(effective_seed)
+    np.random.seed(effective_seed % (2**32 - 1))
+    torch.manual_seed(effective_seed)
+    if torch.cuda.is_available():
+        torch.cuda.manual_seed(effective_seed)
+        torch.cuda.manual_seed_all(effective_seed)
+    return effective_seed
+
+
 if __name__ == "__main__":
     load_dotenv()
 
@@ -213,10 +242,24 @@ if __name__ == "__main__":
         "--split_id",
         type=int,
         default=0,
-        help="Leave as 0.",
+        help="Shard index for multi-job sampling.",
+    )
+    parser.add_argument(
+        "--num_splits",
+        type=int,
+        default=1,
+        help="Total number of sampling shards/jobs.",
+    )
+    parser.add_argument(
+        "--seed_stride",
+        type=int,
+        default=1000003,
+        help="Deterministic per-shard seed stride.",
     )
     args = parser.parse_args()
     logger.info(" ".join(sys.argv))
+    assert args.num_splits >= 1
+    assert 0 <= args.split_id < args.num_splits
 
     assert (
         torch.cuda.is_available()
@@ -250,9 +293,25 @@ if __name__ == "__main__":
 
     # Set root path for this inference run
     root_path = f"./inference/{config_name}"
-    if os.path.exists(root_path):
-        shutil.rmtree(root_path)
-    os.makedirs(root_path, exist_ok=True)
+    if args.num_splits == 1:
+        if os.path.exists(root_path):
+            shutil.rmtree(root_path)
+        os.makedirs(root_path, exist_ok=True)
+        samples_dir_fid = os.path.join(root_path, "samples_fid")
+        shard_root_path = root_path
+    else:
+        os.makedirs(root_path, exist_ok=True)
+        shard_root_path = os.path.join(
+            root_path, f"split_{args.split_id:02d}_of_{args.num_splits:02d}"
+        )
+        if os.path.exists(shard_root_path):
+            shutil.rmtree(shard_root_path)
+        os.makedirs(shard_root_path, exist_ok=True)
+        samples_dir_fid = os.path.join(root_path, "samples_fid_sharded")
+        os.makedirs(samples_dir_fid, exist_ok=True)
+        shard_prefix = f"split{args.split_id:02d}_"
+        for old_file in Path(samples_dir_fid).glob(f"{shard_prefix}*_fid.pdb"):
+            old_file.unlink()
 
     # Load model from checkpoint
     ckpt_path = cfg.ckpt_path
@@ -277,9 +336,12 @@ if __name__ == "__main__":
         ckpt = torch.load(ckpt_file, map_location="cpu")
         model.load_state_dict(ckpt["state_dict"])
 
-    # Set seed
-    logger.info(f"Seeding everything to seed {cfg.seed}")
-    L.seed_everything(cfg.seed)
+    # Set seed. For sharded runs, each shard gets a deterministically different seed.
+    effective_seed = set_inference_seed(
+        base_seed=cfg.seed,
+        split_id=args.split_id,
+        seed_stride=args.seed_stride,
+    )
 
     # Set inference variables and potentially load autoguidance
     nn_ag = None
@@ -299,6 +361,12 @@ if __name__ == "__main__":
     lens_sample, nsamples = split_nlens(
         nlens_dict, max_nsamples=cfg.max_nsamples, n_replica=1
     )  # Assume running on 1 GPU
+    if args.num_splits > 1:
+        lens_sample = lens_sample[args.split_id :: args.num_splits]
+        nsamples = nsamples[args.split_id :: args.num_splits]
+        logger.info(
+            f"Running shard {args.split_id + 1}/{args.num_splits} with {len(lens_sample)} length batches"
+        )
     if cfg.fold_cond:
         len_cath_codes = parse_len_cath_code(cfg)
     else:
@@ -319,6 +387,9 @@ if __name__ == "__main__":
     flat_cfg = OmegaConf.to_container(cfg, resolve=True, enum_to_str=True)
     flat_dict = pd.json_normalize(flat_cfg, sep="_").to_dict(orient="records")[0]
     flat_dict = {k: str(v) for k, v in flat_dict.items()}
+    flat_dict["effective_seed"] = str(effective_seed)
+    flat_dict["split_id"] = str(args.split_id)
+    flat_dict["num_splits"] = str(args.num_splits)
     columns = list(flat_dict.keys())
 
     # Sample the model
@@ -348,7 +419,7 @@ if __name__ == "__main__":
                 dir_name = f"n_{n}_id_{samples_per_length[n]}"
                 samples_per_length[n] += 1
                 sample_root_path = os.path.join(
-                    root_path, dir_name
+                    shard_root_path, dir_name
                 )  # ./inference/conf_{}/n_{}_id_{}
                 os.makedirs(sample_root_path, exist_ok=False)
 
@@ -379,16 +450,16 @@ if __name__ == "__main__":
 
     # Code for FID
     if cfg.compute_fid:
-        # Create directory to store all samples
-        samples_dir_fid = os.path.join(root_path, "samples_fid")
-        os.makedirs(samples_dir_fid, exist_ok=True)
-
         # Store samples
         list_of_pdbs = []
         for pred in predictions:
             coors_atom37 = pred  # [b, n, 37, 3], prediction_step returns atom37
             for i in range(coors_atom37.shape[0]):
-                pdb_path = os.path.join(samples_dir_fid, f"{len(list_of_pdbs)}_fid.pdb")
+                if args.num_splits == 1:
+                    fname = f"{len(list_of_pdbs)}_fid.pdb"
+                else:
+                    fname = f"split{args.split_id:02d}_{len(list_of_pdbs)}_fid.pdb"
+                pdb_path = os.path.join(samples_dir_fid, fname)
                 write_prot_to_pdb(
                     coors_atom37[i].numpy(),
                     pdb_path,
@@ -397,28 +468,45 @@ if __name__ == "__main__":
                 )
                 list_of_pdbs.append(pdb_path)
 
+        if args.num_splits > 1:
+            logger.info(
+                f"Shard {args.split_id + 1}/{args.num_splits} wrote {len(list_of_pdbs)} samples to {samples_dir_fid}. "
+                "Skipping metric computation on this shard. Run a final global metric pass on the combined directory once all shards finish."
+            )
+        else:
         # Initialize row with results
-        res_row = list(flat_dict.values())
+            res_row = list(flat_dict.values())
 
-        # Compute metrics and add respective columns and values
-        for cfg_mf in cfg.metric_factory:
-            if isinstance(model, Proteina):
-                assert cfg_mf.ca_only == True, "Please turn on ca_only for CAFlow model"
-            metric_factory = GenerationMetricFactory(**cfg_mf).cuda()
-            metrics = generation_metric_from_list(list_of_pdbs, metric_factory)
-            for k, v in metrics.items():
+            # Compute metrics and add respective columns and values
+            for cfg_mf in cfg.metric_factory:
+                if isinstance(model, Proteina):
+                    assert cfg_mf.ca_only == True, "Please turn on ca_only for CAFlow model"
+                metric_factory = GenerationMetricFactory(**cfg_mf).cuda()
+                metrics = generation_metric_from_list(list_of_pdbs, metric_factory)
+                for k, v in metrics.items():
+                    columns += ["_res_" + k]
+                    res_row += [v.cpu().item()]
+
+            raw_metric_dict = {
+                k[len("_res_") :]: v for k, v in zip(columns, res_row) if k.startswith("_res_")
+            }
+            paper_metrics = format_distributional_metrics(
+                summarize_distributional_metrics(raw_metric_dict)
+            )
+            for k, v in paper_metrics.items():
                 columns += ["_res_" + k]
-                res_row += [v.cpu().item()]
+                res_row += [v]
 
-        # Create dataframe
-        df = pd.DataFrame([res_row], columns=columns)
-        df = df.drop("metric_factory", axis=1)  # For nicer table
+            # Create dataframe
+            df = pd.DataFrame([res_row], columns=columns)
+            df = df.drop("metric_factory", axis=1)  # For nicer table
 
     # Write results to csv file
     if cfg.compute_fid:
-        df.to_csv(
-            os.path.join(root_path, "..", f"results_{config_name}_fid.csv"), index=False
-        )
+        if args.num_splits == 1:
+            df.to_csv(
+                os.path.join(root_path, "..", f"results_{config_name}_fid.csv"), index=False
+            )
     else:
         csv_file = os.path.join(root_path, "..", f"results_{config_name}.csv")
         df.to_csv(csv_file, index=False)

@@ -1,0 +1,44 @@
+defaults:
+  - inference_ucond_200m_notri
+  - _self_
+
+run_name_: neurips_finetune_A6000_8gpu_selfd_fid
+ckpt_path: /homes/kasram/broteina/proteina/store/neurips_finetune_A6000_8gpu_selfd/checkpoints
+ckpt_name: chk_epoch=00000004_step=000000028000.ckpt
+
+sampling_caflow:
+  sampling_mode: sc  # "vf" for ODE sampling, "sc" for SDE sampling
+  sc_scale_noise: 1.0  # noise scale, used if sampling_mode == "sc"
+
+
+# Lengths to sample. Uses `nres_lens` if specified, otherwise arange(min_len, max_len+1, step)
+nres_lens: 
+min_len: 60
+max_len: 255
+step_len: 5
+
+# Number of samples per protein length
+nsamples_per_len: 125 # 250
+
+# Maximum number of samples in each batch
+max_nsamples: 8 # 64
+
+# Designability
+compute_designability: False
+
+# FID-related metrics
+compute_fid: True
+metric_factory:
+  - metrics: ["FID", "fJSD_C", "fJSD_A", "fJSD_T"]
+    ckpt_path: ${oc.env:DATA_PATH}/metric_factory/model_weights/gearnet_ca.pth
+    real_features_path: ${oc.env:DATA_PATH}/metric_factory/features/pdb_eval_ca_features.pth
+    ca_only: True
+    prefix: PDB_
+  - metrics: ["FID", "fJSD_C", "fJSD_A", "fJSD_T"]
+    ckpt_path: ${oc.env:DATA_PATH}/metric_factory/model_weights/gearnet_ca.pth
+    real_features_path: ${oc.env:DATA_PATH}/metric_factory/features/D_FS_eval_ca_features.pth
+    ca_only: True
+    prefix: AFDB_
+  - metrics: ["fS_C", "fS_A", "fS_T"]
+    ckpt_path: ${oc.env:DATA_PATH}/metric_factory/model_weights/gearnet_ca.pth
+    ca_only: True
