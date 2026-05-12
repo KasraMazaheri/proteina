@@ -2,6 +2,8 @@ import argparse
 import json, time, os, sys, glob
 import shutil
 import warnings
+from collections import defaultdict
+from pathlib import Path
 import numpy as np
 import torch
 from torch import optim
@@ -77,9 +79,14 @@ def get_args():
 
 class Designability:
 
-    def __init__(self, device):
+    def __init__(self, device, out_dir=None, file_suffix=None):
 
         self.device = device
+        self.out_dir = Path(out_dir) if out_dir is not None else None
+        if self.out_dir is not None:
+            self.out_dir.mkdir(parents=True, exist_ok=True)
+        self.file_suffix = file_suffix
+        self.saved_counts = defaultdict(int)
 
         args = get_args()
 
@@ -228,6 +235,7 @@ class Designability:
         for i in range(0, len(seqs), ns):
             batch_seqs = seqs[i:i+ns]
             protein_idx = i // ns
+            candidate_outputs = []
             for j in range(0, len(batch_seqs), esm_batch_size):
                 cur_batch_seqs = batch_seqs[j:j+esm_batch_size]
                 with torch.no_grad():
@@ -246,12 +254,32 @@ class Designability:
                 pred_positions.requires_grad_(return_grad)
 
                 for k in range(len(pred_positions)):
+                    candidate_outputs.append(
+                        {
+                            key: value[k].detach().cpu()
+                            for key, value in outputs.items()
+                            if torch.is_tensor(value)
+                            and value.ndim > 0
+                            and value.shape[0] == len(cur_batch_seqs)
+                        }
+                    )
                     coors_1, coors_2 = kabsch_align_ind(pred_positions[k], proteins[protein_idx], ret_both=True)
                     sq_err = (coors_1 - coors_2) ** 2
                     rmsd_list.append(sq_err.sum(dim=-1).mean().sqrt())
 
             cur_rmsds = rmsd_list[-ns:]
             opt = cur_rmsds.index(min(cur_rmsds))
+
+            if self.out_dir is not None and min(cur_rmsds) < 2:
+                opt_output = candidate_outputs[opt]
+                if opt_output:
+                    num_file = self.saved_counts[nres]
+                    self.saved_counts[nres] += 1
+                    if self.file_suffix:
+                        fname = f"{nres}_{self.file_suffix}_{num_file}.pt"
+                    else:
+                        fname = f"{nres}_{num_file}.pt"
+                    torch.save(opt_output, self.out_dir / fname)
 
 
         rmsd_list = torch.stack(rmsd_list)

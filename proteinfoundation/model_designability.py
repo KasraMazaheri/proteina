@@ -1,5 +1,6 @@
 import os
 import sys
+from pathlib import Path
 from typing import List
 
 root = os.path.abspath(".")
@@ -55,6 +56,31 @@ def resolve_eval_config_name(eval_length: str, explicit_config_name: str) -> str
     if explicit_config_name != "inference_base":
         return explicit_config_name
     return EVAL_CONFIG_BY_LENGTH[eval_length]
+
+
+def iter_designability_predictions(predictions):
+    """Yield (proteins, scores) pairs from Lightning predict outputs.
+
+    Lightning can return nested per-rank / per-dataloader containers under
+    multi-GPU prediction. The designability path only cares about the leaf
+    batch outputs, which are 2-tuples of (proteins, scores).
+    """
+
+    if isinstance(predictions, (tuple, list)):
+        if (
+            len(predictions) == 2
+            and torch.is_tensor(predictions[0])
+            and torch.is_tensor(predictions[1])
+        ):
+            yield predictions[0], predictions[1]
+            return
+        for item in predictions:
+            yield from iter_designability_predictions(item)
+        return
+
+    raise TypeError(
+        f"Unexpected prediction container type: {type(predictions)!r}"
+    )
 
 class GenDataset(Dataset):
     """
@@ -245,6 +271,41 @@ class ModelDesignability:
             default=0,
             help="Leave as 0.",
         )
+        parser.add_argument(
+            "--lengths",
+            type=str,
+            default=None,
+            help="Optional comma-separated lengths override, e.g. 50,100,150,200,250.",
+        )
+        parser.add_argument(
+            "--nsamples_per_len",
+            type=int,
+            default=None,
+            help="Optional override for nsamples_per_len.",
+        )
+        parser.add_argument(
+            "--max_nsamples",
+            type=int,
+            default=None,
+            help="Optional override for max_nsamples.",
+        )
+        parser.add_argument(
+            "--seed",
+            type=int,
+            default=None,
+            help="Optional override for cfg.seed.",
+        )
+        parser.add_argument(
+            "--output_root",
+            type=str,
+            default=None,
+            help="Optional output directory root. If unset, uses samples/neurips/<ckpt>...",
+        )
+        parser.add_argument(
+            "--clear_output_root",
+            action="store_true",
+            help="If set together with --output_root, delete it before generation.",
+        )
         parser.add_argument('--ckpt_name', '-c', help='Name of the checkpoint to process', required=True)
         args = parser.parse_args(args=args)
         logger.info(" ".join(sys.argv))
@@ -272,8 +333,24 @@ class ModelDesignability:
             else:
                 config_name = resolve_eval_config_name(args.eval_length, args.config_name)
             cfg = hydra.compose(config_name=config_name)
+            # This script exists to evaluate designability, so force it on
+            # regardless of the underlying inference config. predict_step in
+            # model_trainer_base.py reads `inf_cfg.compute_designability`
+            # (the model attribute `compute_designabilities` is dead code).
+            cfg.compute_designability = True
             if args.noise_scale is not None:
                 cfg.sampling_caflow.sc_scale_noise = float(args.noise_scale)
+            if args.lengths:
+                cfg.nres_lens = [int(x.strip()) for x in args.lengths.split(",") if x.strip()]
+                cfg.min_len = None
+                cfg.max_len = None
+                cfg.step_len = None
+            if args.nsamples_per_len is not None:
+                cfg.nsamples_per_len = int(args.nsamples_per_len)
+            if args.max_nsamples is not None:
+                cfg.max_nsamples = int(args.max_nsamples)
+            if args.seed is not None:
+                cfg.seed = int(args.seed)
             logger.info(f"Inference config {cfg}")
             run_name = cfg.run_name_
 
@@ -322,6 +399,8 @@ class ModelDesignability:
         self.cfg = cfg
         self.eval_length = args.eval_length
         self.pdb_subdir = samples_pdb_subdir(args.eval_length)
+        self.output_root = args.output_root
+        self.clear_output_root = args.clear_output_root
 
     def compute_designability(self, ckpt_file, ckpt_name):
         # Load model from checkpoint
@@ -361,31 +440,58 @@ class ModelDesignability:
 
         model.configure_inference(self.cfg, nn_ag=nn_ag)
 
-        model.compute_designabilities = True
-        predictions = self.trainer.predict(model, self.dataloader)
-
-        # samples_dir = f"./samples/neurips/{ckpt_file.split('/')[-1][:-5]}/pdbs/"
         _sc = sc_suffix(self.cfg["sampling_caflow"]["sc_scale_noise"])
-        samples_dir = f"./samples/neurips/{ckpt_name}{_sc}/{self.pdb_subdir}/"
+        if self.output_root is not None:
+            root_out = self.output_root
+        else:
+            root_out = f"./samples/neurips/{ckpt_name}{_sc}"
+        if self.clear_output_root and os.path.exists(root_out):
+            # Best-effort cleanup for single-process use. For DDP-driven evaluation
+            # the caller should clear the directory before launching to avoid
+            # multi-rank deletion races.
+            shutil.rmtree(root_out, ignore_errors=True)
+        samples_dir = f"{root_out}/{self.pdb_subdir}/"
+        viz_dir = f"{root_out}/viz/"
 
         os.makedirs(samples_dir, exist_ok=True)
-        os.makedirs(samples_dir+"designable", exist_ok=True)
-        os.makedirs(samples_dir+"undesignable", exist_ok=True)
+        os.makedirs(samples_dir + "designable", exist_ok=True)
+        os.makedirs(samples_dir + "undesignable", exist_ok=True)
+        os.makedirs(viz_dir, exist_ok=True)
+
+        model.designability_out_dir = viz_dir
+        predictions = self.trainer.predict(model, self.dataloader)
 
         rank = self.trainer.global_rank
 
         cnt = 0
-        for proteins,scores in predictions:
+        nbatches = 0
+        for proteins, scores in iter_designability_predictions(predictions):
+            nbatches += 1
+            n = proteins.shape[-3]
             for i in range(len(scores)):
                 score = scores[i]
                 protein = proteins[i].cpu().numpy()
+                fname = f"{n}_{rank}_{cnt}.pdb"
                 if score < 2:
-                    write_prot_to_pdb(protein, f"{samples_dir}designable/{rank}_{cnt}.pdb")
+                    write_prot_to_pdb(
+                        protein,
+                        f"{samples_dir}designable/{fname}",
+                        overwrite=True,
+                        no_indexing=True,
+                    )
                 else:
-                    write_prot_to_pdb(protein, f"{samples_dir}undesignable/{rank}_{cnt}.pdb")
+                    write_prot_to_pdb(
+                        protein,
+                        f"{samples_dir}undesignable/{fname}",
+                        overwrite=True,
+                        no_indexing=True,
+                    )
                 cnt += 1
 
-        print(f"Rank: {self.trainer.global_rank=} finished predicting. Designability: {cnt / len(predictions)}")
+        print(
+            f"Rank: {self.trainer.global_rank=} finished predicting. "
+            f"Saved {cnt} samples across {nbatches} predict outputs."
+        )
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Compute stats for a given checkpoint")
@@ -413,14 +519,24 @@ if __name__ == "__main__":
     parser.add_argument("--config_number", type=int, default=-1)
     parser.add_argument("--config_subdir", type=str)
     parser.add_argument("--split_id", type=int, default=0)
+    parser.add_argument("--lengths", type=str, default=None)
+    parser.add_argument("--nsamples_per_len", type=int, default=None)
+    parser.add_argument("--max_nsamples", type=int, default=None)
+    parser.add_argument("--seed", type=int, default=None)
+    parser.add_argument("--output_root", type=str, default=None)
+    parser.add_argument("--clear_output_root", action="store_true")
     args = parser.parse_args()
-    ckpt_name = args.ckpt_name
-    # ckpt_file = f"./checkpoints/{ckpt_name}.ckpt"
-    ckpt_file = f"/homes/kasram/broteina/proteina/store/{ckpt_name}.ckpt"
-    ckpt_name = ckpt_name.replace("/", "_")
+    ckpt_arg = args.ckpt_name
+    ckpt_path = Path(ckpt_arg)
+    if ckpt_path.exists():
+        ckpt_file = str(ckpt_path.resolve())
+        ckpt_name = ckpt_path.stem
+    else:
+        ckpt_file = f"/homes/kasram/broteina/proteina/store/{ckpt_arg}.ckpt"
+        ckpt_name = ckpt_arg.replace("/", "_")
     print(f"{ckpt_file=}")
     print(f"{ckpt_name=}")
 
-    model_designability = ModelDesignability()
+    model_designability = ModelDesignability(args=sys.argv[1:])
     result = model_designability.compute_designability(ckpt_file, ckpt_name)
     

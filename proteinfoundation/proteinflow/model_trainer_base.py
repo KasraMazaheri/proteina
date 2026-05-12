@@ -560,7 +560,13 @@ class ModelTrainerBase(L.LightningModule):
             fixed_structure_mask = fixed_structure_mask,
         )
         if self.designability is None:
-            self.designability = Designability(self.device)
+            designability_out_dir = getattr(self, "designability_out_dir", None)
+            file_suffix = f"rank{self.global_rank}"
+            self.designability = Designability(
+                self.device,
+                out_dir=designability_out_dir,
+                file_suffix=file_suffix,
+            )
             L.seed_everything(self.cfg_exp.seed + self.global_rank)
         if self.inf_cfg.compute_designability:
             return self.samples_to_atom37(x), self.designability.scRMSD(nm_to_ang(x), batch["nres"].item())

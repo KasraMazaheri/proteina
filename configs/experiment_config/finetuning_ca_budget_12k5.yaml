@@ -1,0 +1,65 @@
+run_name_: data_budget_ablation_12k5
+
+hardware:
+  ncpus_per_task_train_: 24
+  ncpus_per_task_prepro_: 32
+  accelerator: gpu
+  ngpus_per_node_: 8
+  nnodes_: 1
+
+loss:
+  t_distribution:
+    name: mix_up02_beta
+    p1: 1.9
+    p2: 1.0
+  loss_t_clamp: 0.9
+  use_aux_loss: True
+  aux_loss_t_lim: 0.3
+  thres_aux_2d_loss: 0.6
+  aux_loss_weight: 1.0
+  num_dist_buckets: 64
+  max_dist_boundary: 1.0
+
+defaults:
+  - model: caflow_finetuning
+  - _self_
+
+dataset: pdb_train_uniform_12k5
+dataset_config_subdir: broteina
+
+force_precision_f32: False
+
+pretrain_ckpt_path: /homes/kasram/broteina/proteina/checkpoints/proteina_v1.2_DFS_200M_notri.ckpt
+
+training:
+  self_cond: True
+  fold_cond: False
+  mask_T_prob: 0.5
+  mask_A_prob: 0.5
+  mask_C_prob: 0.5
+  fold_label_sample_ratio: [0.5, 0.1, 0.15, 0.25]
+
+opt:
+  lr: 0.0001
+  max_epochs: 512
+  log_every_n_steps: 1
+  accumulate_grad_batches: 4
+  val_check_interval: 3125
+  skip_nan_grad: False
+  grad_and_weight_analysis: False
+  dist_strategy: ddp
+
+log:
+  wandb_project: protein_transformer_big_runs
+  log_wandb: True
+  checkpoint: True
+  checkpoint_every_n_steps: 3125
+  last_ckpt_every_n_steps: 400
+
+seed: 42
+
+ema:
+  decay: 0.999
+  validate_original_weights: False
+  every_n_steps: 1
+  cpu_offload: False

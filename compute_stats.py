@@ -88,24 +88,24 @@ if __name__ == "__main__":
 
     print("Secondary Structure Content:", sec / num_designable)
     
-    # tm_sum = dict(zip(range(50,251,50),[0 for _ in range(5)]))
-    # tm_count = dict(zip(range(50,251,50),[0 for _ in range(5)]))
+    tm_sum = dict(zip(range(50,251,50),[0 for _ in range(5)]))
+    tm_count = dict(zip(range(50,251,50),[0 for _ in range(5)]))
 
-    # for idx,f1 in enumerate(tqdm(designable_list)):
-    #     nres = int(f1.split('_')[0])
-    #     coords1, seq1 = get_residue_data(next(struc[f1].get_chains()))
-    #     for f2 in designable_list[idx+1:]:
-    #         if int(f2.split('_')[0]) == nres:
-    #             coords2, seq2 = get_residue_data(next(struc[f2].get_chains()))
-    #             result = tm_align(coords1, coords2, seq1, seq2)
-    #             tm_sum[nres] += result.tm_norm_chain1
-    #             tm_count[nres] += 1
+    for idx,f1 in enumerate(tqdm(designable_list)):
+        nres = int(f1.split('_')[0])
+        coords1, seq1 = get_residue_data(next(struc[f1].get_chains()))
+        for f2 in designable_list[idx+1:]:
+            if int(f2.split('_')[0]) == nres:
+                coords2, seq2 = get_residue_data(next(struc[f2].get_chains()))
+                result = tm_align(coords1, coords2, seq1, seq2)
+                tm_sum[nres] += result.tm_norm_chain1
+                tm_count[nres] += 1
 
-    # tm_avg = []
-    # for nres in range(50,251,50):
-    #     tm_avg.append(tm_sum[nres] / tm_count[nres])
-    # print("TMScore by Length:", tm_avg)
-    # print("Average TMScore:", sum(tm_avg) / len(tm_avg))
+    tm_avg = []
+    for nres in range(50,251,50):
+        tm_avg.append(tm_sum[nres] / max(tm_count[nres], 1))
+    print("TMScore by Length:", tm_avg)
+    print("Average TMScore:", sum(tm_avg) / len(tm_avg))
 
     os.makedirs("foldseek_tmp", exist_ok=True)
     if os.path.exists(f"foldseek_tmp/{ckpt_name}"):

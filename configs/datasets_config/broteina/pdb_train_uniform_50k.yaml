@@ -1,0 +1,20 @@
+datamodule:
+  _target_: "proteinfoundation.datasets.pdb_data.PDBLightningDataModule"
+  data_dir: /homes/kasram/broteina/dataset/des/full_dataset/
+  file_identifier: "uniform_pdb_50k"
+  in_memory: False
+  format: "pdb"
+  overwrite: False
+  batch_padding: True
+  sampling_mode: "random"
+  transforms:
+    - _target_: "proteinfoundation.datasets.transforms.GlobalRotationTransform"
+    - _target_: "proteinfoundation.datasets.transforms.ChainBreakPerResidueTransform"
+  batch_size: 4
+  num_workers: 8
+  pin_memory: True
+
+  datasplitter:
+    _target_: "proteinfoundation.datasets.pdb_data.PDBDataSplitter"
+    train_val_test: [0.994, 0.005, 0.001]
+    split_type: "random"

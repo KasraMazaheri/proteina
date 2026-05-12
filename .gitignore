@@ -35,3 +35,4 @@ samples_metrics/*
 configs/experiment_config/generated_*
 logs/
 logs.txt
+inference_runs/
